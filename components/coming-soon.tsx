@@ -51,7 +51,7 @@ export function ComingSoon() {
             alt="Subtex"
             width={320}
             height={120}
-            className="mx-auto h-24 w-auto"
+            className="mx-auto h-32 sm:h-40 w-auto"
             priority
           />
         </div>
