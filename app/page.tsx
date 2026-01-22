@@ -1,65 +1,165 @@
-import Image from "next/image";
+import type { Metadata } from "next";
+import { Hero } from "@/components/hero";
+import { ProductConfiguratorWrapper } from "@/components/product-configurator-wrapper";
+import { AcmInfoSection } from "@/components/acm-info-section";
+import { ContactForm } from "@/components/contact-form";
+import { FaqSection } from "@/components/faq-section";
+import { Card, CardContent } from "@/components/ui/card";
+import { getActiveVariants, getBulkDiscounts } from "@/server/actions/products";
+import { siteConfig, seoContent, acmFAQs, generateFAQSchema, generateProductSchema } from "@/lib/seo";
 
-export default function Home() {
+export const metadata: Metadata = {
+  title: seoContent.homepage.title,
+  description: seoContent.homepage.description,
+  keywords: seoContent.homepage.keywords,
+  alternates: {
+    canonical: siteConfig.url,
+  },
+  openGraph: {
+    title: seoContent.homepage.title,
+    description: seoContent.homepage.description,
+    url: siteConfig.url,
+    type: "website",
+    images: [
+      {
+        url: "/Subtex_ACM_Stack.png",
+        width: 1200,
+        height: 630,
+        alt: "Subtex ACM Sheets - Premium Aluminium Composite Panels Perth",
+      },
+    ],
+  },
+};
+
+// JSON-LD Component
+function JsonLd({ data }: { data: object }) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
+    />
+  );
+}
+
+export default async function HomePage() {
+  // Fetch real data from database
+  const [variantsData, bulkDiscountsData] = await Promise.all([
+    getActiveVariants(),
+    getBulkDiscounts(),
+  ]);
+
+  // Transform variants to match component props
+  const variants = variantsData.map((v) => ({
+    id: v.id,
+    color: v.color,
+    material: v.material,
+    size: v.size,
+    sku: v.sku,
+    priceInCents: v.priceInCents,
+    stock: v.stock,
+  }));
+
+  // Transform bulk discounts
+  const bulkDiscounts = bulkDiscountsData.map((d) => ({
+    minQuantity: d.minQuantity,
+    discountPercent: d.discountPercent,
+  }));
+
+  // Generate structured data
+  const faqSchema = generateFAQSchema(acmFAQs);
+  
+  // Product schema for the main product offering
+  const productSchema = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: "ACM Sheets - Aluminium Composite Panels",
+    description: "Premium aluminium composite material (ACM) sheets for signage, cladding, and architectural applications. Available in white and black, gloss and matte finishes.",
+    image: `${siteConfig.url}/Subtex_ACM_Stack.png`,
+    brand: {
+      "@type": "Brand",
+      name: "Subtex",
+    },
+    manufacturer: {
+      "@type": "Organization",
+      name: "Subtex",
+    },
+    offers: {
+      "@type": "AggregateOffer",
+      priceCurrency: "AUD",
+      lowPrice: variants.length > 0 ? Math.min(...variants.map(v => v.priceInCents)) / 100 : 65,
+      highPrice: variants.length > 0 ? Math.max(...variants.map(v => v.priceInCents)) / 100 : 125,
+      offerCount: variants.length || 8,
+      availability: "https://schema.org/InStock",
+      seller: {
+        "@type": "Organization",
+        name: "Subtex",
+      },
+    },
+    category: "Building Materials > Signage > Composite Panels",
+    material: "Aluminium Composite Material",
+    color: ["White", "Black"],
+    additionalProperty: [
+      {
+        "@type": "PropertyValue",
+        name: "Finish",
+        value: "Gloss, Matte",
+      },
+      {
+        "@type": "PropertyValue",
+        name: "Size",
+        value: "Standard (1220x2440mm), XL",
+      },
+    ],
+  };
+
+  return (
+    <>
+      {/* Structured Data for SEO */}
+      <JsonLd data={faqSchema} />
+      <JsonLd data={productSchema} />
+      
+      <Hero />
+      
+      {/* SEO-friendly heading structure */}
+      <section className="sr-only">
+        <h1>ACM Sheets Perth - Aluminium Composite Panels Supplier</h1>
+        <p>
+          Subtex is Perth&apos;s trusted local supplier of premium ACM (Aluminium Composite Material) sheets. 
+          We offer high-quality aluminium composite panels for signage, cladding, and architectural applications 
+          across Western Australia. Available in white and black colours with gloss and matte finishes.
+        </p>
+      </section>
+      
+      <ProductConfiguratorWrapper
+        variants={variants.length > 0 ? variants : undefined}
+        bulkDiscounts={bulkDiscounts.length > 0 ? bulkDiscounts : undefined}
+      />
+      
+      <AcmInfoSection />
+      
+      {/* FAQ Section for SEO */}
+      <FaqSection faqs={acmFAQs.slice(0, 6)} />
+      
+      {/* Contact Section */}
+      <section id="contact" className="py-16 bg-background">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl sm:text-4xl font-bold mb-4">
+              Get a Quote for ACM Sheets in Perth
+            </h2>
+            <p className="text-muted-foreground max-w-xl mx-auto text-lg">
+              Need ACM sheets for your signage or cladding project? Contact us for pricing, bulk discounts, and delivery options across Perth and Western Australia.
+            </p>
+          </div>
+          <div className="max-w-2xl mx-auto">
+            <Card>
+              <CardContent className="pt-6">
+                <ContactForm showCard={false} />
+              </CardContent>
+            </Card>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+      </section>
+    </>
   );
 }
