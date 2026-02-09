@@ -2,11 +2,10 @@ import type { Metadata } from "next";
 import { Hero } from "@/components/hero";
 import { ProductConfiguratorWrapper } from "@/components/product-configurator-wrapper";
 import { AcmInfoSection } from "@/components/acm-info-section";
-import { ContactForm } from "@/components/contact-form";
 import { FaqSection } from "@/components/faq-section";
-import { Card, CardContent } from "@/components/ui/card";
-import { getActiveVariants, getBulkDiscounts } from "@/server/actions/products";
-import { siteConfig, seoContent, acmFAQs, generateFAQSchema, generateProductSchema } from "@/lib/seo";
+import { PromoScrollSentinel } from "@/components/promo-dialog";
+import { getAcmProducts } from "@/server/actions/products";
+import { siteConfig, seoContent, acmFAQs, generateFAQSchema } from "@/lib/seo";
 
 export const metadata: Metadata = {
   title: seoContent.homepage.title,
@@ -35,45 +34,45 @@ export const metadata: Metadata = {
 function JsonLd({ data }: { data: object }) {
   return (
     <script
-      type="application/ld+json"
+      type='application/ld+json'
       dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
     />
   );
 }
 
 export default async function HomePage() {
-  // Fetch real data from database
-  const [variantsData, bulkDiscountsData] = await Promise.all([
-    getActiveVariants(),
-    getBulkDiscounts(),
-  ]);
+  // Fetch ACM products from database
+  const acmProductsData = await getAcmProducts();
 
-  // Transform variants to match component props
-  const variants = variantsData.map((v) => ({
-    id: v.id,
-    color: v.color,
-    material: v.material,
-    size: v.size,
-    sku: v.sku,
-    priceInCents: v.priceInCents,
-    stock: v.stock,
-  }));
-
-  // Transform bulk discounts
-  const bulkDiscounts = bulkDiscountsData.map((d) => ({
-    minQuantity: d.minQuantity,
-    discountPercent: d.discountPercent,
-  }));
+  // Transform ACM products for the configurator
+  const acmProducts = acmProductsData
+    .filter((p) => p.acmColor && p.acmSize)
+    .map((p) => ({
+      id: p.id,
+      acmColor: p.acmColor,
+      acmSize: p.acmSize,
+      name: p.name,
+      basePriceInCents: p.basePriceInCents,
+      imageUrl: p.imageUrl,
+      partNumber: p.partNumber,
+      stock: p.stock,
+      lowStockThreshold: p.lowStockThreshold,
+      bulkDiscounts: p.bulkDiscounts?.map((d) => ({
+        minQuantity: d.minQuantity,
+        discountPercent: d.discountPercent,
+      })),
+    }));
 
   // Generate structured data
   const faqSchema = generateFAQSchema(acmFAQs);
-  
+
   // Product schema for the main product offering
   const productSchema = {
     "@context": "https://schema.org",
     "@type": "Product",
     name: "ACM Sheets - Aluminium Composite Panels",
-    description: "Premium aluminium composite material (ACM) sheets for signage, cladding, and architectural applications. Available in white and black, gloss and matte finishes.",
+    description:
+      "Premium aluminium composite material (ACM) sheets for signage, trailer alignment, caravan panels, and kitchen splashboards. Available in white and black, gloss and matte finishes. Note: PE core ACM is not fireproof and not suitable for building cladding.",
     image: `${siteConfig.url}/Subtex_ACM_Stack.png`,
     brand: {
       "@type": "Brand",
@@ -86,9 +85,15 @@ export default async function HomePage() {
     offers: {
       "@type": "AggregateOffer",
       priceCurrency: "AUD",
-      lowPrice: variants.length > 0 ? Math.min(...variants.map(v => v.priceInCents)) / 100 : 65,
-      highPrice: variants.length > 0 ? Math.max(...variants.map(v => v.priceInCents)) / 100 : 125,
-      offerCount: variants.length || 8,
+      lowPrice:
+        acmProducts.length > 0
+          ? Math.min(...acmProducts.map((p) => p.basePriceInCents)) / 100
+          : 65,
+      highPrice:
+        acmProducts.length > 0
+          ? Math.max(...acmProducts.map((p) => p.basePriceInCents)) / 100
+          : 125,
+      offerCount: acmProducts.length || 8,
       availability: "https://schema.org/InStock",
       seller: {
         "@type": "Organization",
@@ -117,49 +122,31 @@ export default async function HomePage() {
       {/* Structured Data for SEO */}
       <JsonLd data={faqSchema} />
       <JsonLd data={productSchema} />
-      
+
       <Hero />
-      
+
+      {/* Promo scroll trigger - fires when user scrolls past this point */}
+      <PromoScrollSentinel />
+
       {/* SEO-friendly heading structure */}
-      <section className="sr-only">
+      <section className='sr-only'>
         <h1>ACM Sheets Perth - Aluminium Composite Panels Supplier</h1>
         <p>
-          Subtex is Perth&apos;s trusted local supplier of premium ACM (Aluminium Composite Material) sheets. 
-          We offer high-quality aluminium composite panels for signage, cladding, and architectural applications 
-          across Western Australia. Available in white and black colours with gloss and matte finishes.
+          Subtex is Perth&apos;s trusted local supplier of premium ACM
+          (Aluminium Composite Material) sheets. We offer high-quality aluminium
+          composite panels for signage, trailer alignment, caravan panels, and
+          kitchen splashboards across Western Australia. Available in white and
+          black colours with gloss and matte finishes. Note: Our ACM sheets are
+          not fireproof and cannot be used as building cladding.
         </p>
       </section>
-      
-      <ProductConfiguratorWrapper
-        variants={variants.length > 0 ? variants : undefined}
-        bulkDiscounts={bulkDiscounts.length > 0 ? bulkDiscounts : undefined}
-      />
-      
+
+      <ProductConfiguratorWrapper acmProducts={acmProducts} />
+
       <AcmInfoSection />
-      
+
       {/* FAQ Section for SEO */}
       <FaqSection faqs={acmFAQs.slice(0, 6)} />
-      
-      {/* Contact Section */}
-      <section id="contact" className="py-16 bg-background">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl sm:text-4xl font-bold mb-4">
-              Get a Quote for ACM Sheets in Perth
-            </h2>
-            <p className="text-muted-foreground max-w-xl mx-auto text-lg">
-              Need ACM sheets for your signage or cladding project? Contact us for pricing, bulk discounts, and delivery options across Perth and Western Australia.
-            </p>
-          </div>
-          <div className="max-w-2xl mx-auto">
-            <Card>
-              <CardContent className="pt-6">
-                <ContactForm showCard={false} />
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </section>
     </>
   );
 }

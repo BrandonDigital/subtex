@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Search, Filter, Download, MoreHorizontal, Eye, RefreshCw } from "lucide-react";
+import { Search, Filter, Download, MoreHorizontal, Eye, RefreshCw, Ticket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,7 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { updateOrderStatus } from "@/server/actions/orders";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/toast";
 
 interface Order {
   id: string;
@@ -39,6 +39,8 @@ interface Order {
   status: string;
   deliveryMethod: string;
   totalInCents: number;
+  discountInCents: number;
+  discountCodeSnapshot: string | null;
   refundedAmountInCents: number;
   createdAt: Date;
   user: {
@@ -204,6 +206,12 @@ export function OrdersTable({ orders }: OrdersTableProps) {
                       <TableCell>
                         <div>
                           <p className="font-medium">{order.orderNumber}</p>
+                          {order.discountCodeSnapshot && (
+                            <Badge variant="outline" className="mt-1 text-xs gap-1">
+                              <Ticket className="h-3 w-3" />
+                              {order.discountCodeSnapshot}
+                            </Badge>
+                          )}
                           {hasPendingRefund && (
                             <Badge variant="destructive" className="mt-1 text-xs">
                               Refund pending
@@ -231,6 +239,11 @@ export function OrdersTable({ orders }: OrdersTableProps) {
                       <TableCell className="text-right">
                         <div>
                           <p>{formatPrice(order.totalInCents)}</p>
+                          {order.discountInCents > 0 && (
+                            <p className="text-xs text-green-600">
+                              -{formatPrice(order.discountInCents)} discount
+                            </p>
+                          )}
                           {order.refundedAmountInCents > 0 && (
                             <p className="text-xs text-red-500">
                               -{formatPrice(order.refundedAmountInCents)} refunded

@@ -7,8 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { verifyEmailAction, resendVerificationCodeAction, type AuthState } from "@/server/actions/auth";
-import { toast } from "sonner";
-import { signIn } from "next-auth/react";
+import { toast } from "@/components/ui/toast";
 
 interface VerifyEmailFormProps {
   userId: string;

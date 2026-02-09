@@ -1,31 +1,28 @@
 import { auth } from "@/server/auth";
-import { NextResponse } from "next/server";
+import { headers } from "next/headers";
+import { NextRequest, NextResponse } from "next/server";
 
 // Routes that require authentication
-const protectedRoutes = [
-  "/account",
-  "/orders",
-  "/checkout",
-  "/notifications",
-];
+const protectedRoutes = ["/account", "/orders", "/notifications"];
 
 // Routes that require admin role
-const adminRoutes = [
-  "/dashboard",
-];
+const adminRoutes = ["/dashboard"];
 
 // Routes that should redirect to home if already authenticated
-const authRoutes = [
-  "/sign-in",
-  "/sign-up",
-];
+const authRoutes = ["/sign-in", "/sign-up"];
 
-export default auth((req) => {
+export default async function proxy(req: NextRequest) {
   const { nextUrl } = req;
-  const isLoggedIn = !!req.auth;
-  const isAdmin = req.auth?.user?.role === "admin";
-
   const pathname = nextUrl.pathname;
+
+  // Get session using BetterAuth
+  const session = await auth.api.getSession({
+    headers: await headers(),
+  });
+
+  const isLoggedIn = !!session?.user;
+  const user = session?.user as { role?: string } | undefined;
+  const isAdmin = user?.role === "admin";
 
   // Check if trying to access auth routes while logged in
   if (authRoutes.some((route) => pathname.startsWith(route))) {
@@ -59,7 +56,7 @@ export default auth((req) => {
   }
 
   return NextResponse.next();
-});
+}
 
 export const config = {
   matcher: [

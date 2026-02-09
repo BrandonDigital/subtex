@@ -54,10 +54,10 @@ export const warehouseLocations = pgTable("warehouse_locations", {
 export const deliveryQuotes = pgTable("delivery_quotes", {
   id: uuid("id").primaryKey().defaultRandom(),
   orderId: uuid("order_id").references(() => orders.id),
-  userId: uuid("user_id")
+  userId: varchar("user_id", { length: 255 })
     .notNull()
     .references(() => users.id),
-  
+
   // Destination
   destinationType: varchar("destination_type", { length: 50 }).notNull(), // interstate, international
   addressStreet: varchar("address_street", { length: 255 }).notNull(),
@@ -65,27 +65,27 @@ export const deliveryQuotes = pgTable("delivery_quotes", {
   addressState: varchar("address_state", { length: 50 }).notNull(),
   addressPostcode: varchar("address_postcode", { length: 10 }).notNull(),
   addressCountry: varchar("address_country", { length: 100 }).notNull(),
-  
+
   // Order details for quote
   itemCount: integer("item_count").notNull(),
   itemDetails: text("item_details").notNull(), // JSON of items being shipped
-  
+
   // Quote details
   status: quoteStatusEnum("status").default("pending").notNull(),
   quotedAmountInCents: integer("quoted_amount_in_cents"), // GST-inclusive
   quotedAt: timestamp("quoted_at"),
-  quotedBy: uuid("quoted_by").references(() => users.id),
+  quotedBy: varchar("quoted_by", { length: 255 }).references(() => users.id),
   expiresAt: timestamp("expires_at"),
-  
+
   // Stripe Payment Link (for interstate/international)
   stripePaymentLinkId: varchar("stripe_payment_link_id", { length: 255 }),
   stripePaymentLinkUrl: varchar("stripe_payment_link_url", { length: 500 }),
   paidAt: timestamp("paid_at"),
-  
+
   // Notes
   customerNotes: text("customer_notes"),
   adminNotes: text("admin_notes"),
-  
+
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

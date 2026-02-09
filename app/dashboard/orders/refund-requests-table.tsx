@@ -18,7 +18,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { approveRefund, rejectRefund } from "@/server/actions/refunds";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/toast";
 
 interface RefundRequest {
   id: string;

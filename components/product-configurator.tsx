@@ -6,51 +6,35 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { BackorderNotice } from "@/components/backorder-notice";
 
 // Types
 type Color = "white" | "black";
-type Material = "gloss" | "matte";
 type Size = "standard" | "xl";
-
-interface ProductVariant {
-  id: string;
-  color: Color;
-  material: Material;
-  size: Size;
-  sku: string;
-  priceInCents: number;
-  stock: number;
-}
 
 interface BulkDiscount {
   minQuantity: number;
   discountPercent: number;
 }
 
-interface ProductConfiguratorProps {
-  variants?: ProductVariant[];
+interface AcmProduct {
+  id: string;
+  acmColor: Color | null;
+  acmSize: Size | null;
+  name: string;
+  basePriceInCents: number;
+  imageUrl: string | null;
+  partNumber: string | null;
+  stock: number;
+  lowStockThreshold: number;
   bulkDiscounts?: BulkDiscount[];
-  onAddToCart?: (variantId: string, quantity: number) => void;
-  onNotifyMe?: (variantId: string, email: string) => void;
 }
 
-// Default mock data - will be replaced with real data from server
-const defaultVariants: ProductVariant[] = [
-  { id: "1", color: "white", material: "gloss", size: "standard", sku: "WHT-GLS-STD", priceInCents: 8500, stock: 25 },
-  { id: "2", color: "white", material: "gloss", size: "xl", sku: "WHT-GLS-XL", priceInCents: 12500, stock: 12 },
-  { id: "3", color: "white", material: "matte", size: "standard", sku: "WHT-MAT-STD", priceInCents: 8500, stock: 8 },
-  { id: "4", color: "white", material: "matte", size: "xl", sku: "WHT-MAT-XL", priceInCents: 12500, stock: 0 },
-  { id: "5", color: "black", material: "gloss", size: "standard", sku: "BLK-GLS-STD", priceInCents: 8500, stock: 18 },
-  { id: "6", color: "black", material: "gloss", size: "xl", sku: "BLK-GLS-XL", priceInCents: 12500, stock: 5 },
-  { id: "7", color: "black", material: "matte", size: "standard", sku: "BLK-MAT-STD", priceInCents: 8500, stock: 15 },
-  { id: "8", color: "black", material: "matte", size: "xl", sku: "BLK-MAT-XL", priceInCents: 12500, stock: 3 },
-];
-
-const defaultBulkDiscounts: BulkDiscount[] = [
-  { minQuantity: 10, discountPercent: 5 },
-  { minQuantity: 25, discountPercent: 10 },
-  { minQuantity: 50, discountPercent: 15 },
-];
+interface ProductConfiguratorProps {
+  acmProducts: AcmProduct[];
+  onAddToCart?: (productId: string, quantity: number) => void;
+  onNotifyMe?: (productId: string, email: string) => void;
+}
 
 function formatPrice(priceInCents: number): string {
   return new Intl.NumberFormat("en-AU", {
@@ -59,9 +43,16 @@ function formatPrice(priceInCents: number): string {
   }).format(priceInCents / 100);
 }
 
-function getStockStatus(stock: number): { label: string; variant: "default" | "secondary" | "destructive" } {
+function getStockStatus(
+  stock: number,
+  lowStockThreshold: number = 10
+): {
+  label: string;
+  variant: "default" | "secondary" | "destructive";
+} {
   if (stock === 0) return { label: "Out of stock", variant: "destructive" };
-  if (stock <= 10) return { label: `Low stock - ${stock} left`, variant: "secondary" };
+  if (stock <= lowStockThreshold)
+    return { label: `Low stock - ${stock} left`, variant: "secondary" };
   return { label: `${stock} in stock`, variant: "default" };
 }
 
@@ -71,41 +62,72 @@ const sizeLabels: Record<Size, { name: string; dimensions: string }> = {
 };
 
 export function ProductConfigurator({
-  variants = defaultVariants,
-  bulkDiscounts = defaultBulkDiscounts,
+  acmProducts,
   onAddToCart,
   onNotifyMe,
 }: ProductConfiguratorProps) {
   const [selectedColor, setSelectedColor] = useState<Color | null>(null);
-  const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null);
   const [selectedSize, setSelectedSize] = useState<Size | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [notifyEmail, setNotifyEmail] = useState("");
 
-  // Get available options based on current selection
-  const availableColors = [...new Set(variants.map((v) => v.color))];
-  const availableMaterials = selectedColor
-    ? [...new Set(variants.filter((v) => v.color === selectedColor).map((v) => v.material))]
-    : [];
-  const availableSizes =
-    selectedColor && selectedMaterial
-      ? [...new Set(
-          variants
-            .filter((v) => v.color === selectedColor && v.material === selectedMaterial)
-            .map((v) => v.size)
-        )]
-      : [];
+  // Get available colors from ACM products
+  const availableColors = [
+    ...new Set(
+      acmProducts.filter((p) => p.acmColor).map((p) => p.acmColor as Color)
+    ),
+  ];
 
-  // Get selected variant
-  const selectedVariant =
-    selectedColor && selectedMaterial && selectedSize
-      ? variants.find(
-          (v) =>
-            v.color === selectedColor &&
-            v.material === selectedMaterial &&
-            v.size === selectedSize
+  // Get available sizes for selected color
+  const availableSizes = selectedColor
+    ? [
+        ...new Set(
+          acmProducts
+            .filter((p) => p.acmColor === selectedColor && p.acmSize)
+            .map((p) => p.acmSize as Size)
+        ),
+      ]
+    : [];
+
+  // Get selected product
+  const selectedProduct =
+    selectedColor && selectedSize
+      ? acmProducts.find(
+          (p) => p.acmColor === selectedColor && p.acmSize === selectedSize
         )
       : null;
+
+  // Helper to check if a color option is available
+  const isColorAvailable = (color: Color): boolean => {
+    return acmProducts.some((p) => p.acmColor === color);
+  };
+
+  // Helper to check if a color option has stock
+  const isColorInStock = (color: Color): boolean => {
+    const colorProducts = acmProducts.filter((p) => p.acmColor === color);
+    if (colorProducts.length === 0) return false;
+    return colorProducts.some((p) => p.stock > 0);
+  };
+
+  // Helper to check if a size option is available for selected color
+  const isSizeAvailable = (size: Size): boolean => {
+    if (!selectedColor) return false;
+    return acmProducts.some(
+      (p) => p.acmColor === selectedColor && p.acmSize === size
+    );
+  };
+
+  // Helper to check if a size option has stock
+  const isSizeInStock = (size: Size): boolean => {
+    if (!selectedColor) return false;
+    const product = acmProducts.find(
+      (p) => p.acmColor === selectedColor && p.acmSize === size
+    );
+    return product ? product.stock > 0 : false;
+  };
+
+  // Get bulk discounts from selected product
+  const bulkDiscounts = selectedProduct?.bulkDiscounts || [];
 
   // Calculate discount
   const applicableDiscount = bulkDiscounts
@@ -113,242 +135,275 @@ export function ProductConfigurator({
     .sort((a, b) => b.discountPercent - a.discountPercent)[0];
 
   const discountPercent = applicableDiscount?.discountPercent || 0;
-  const unitPrice = selectedVariant?.priceInCents || 0;
+  const unitPrice = selectedProduct?.basePriceInCents || 0;
   const discountedPrice = unitPrice * (1 - discountPercent / 100);
   const subtotal = discountedPrice * quantity;
 
+  const currentStock = selectedProduct?.stock ?? 0;
+  const isInStock = currentStock > 0;
+
   // Reset downstream selections when upstream changes
   useEffect(() => {
-    setSelectedMaterial(null);
     setSelectedSize(null);
   }, [selectedColor]);
 
-  useEffect(() => {
-    setSelectedSize(null);
-  }, [selectedMaterial]);
-
-  // Reset quantity when variant changes
+  // Reset quantity when product changes
   useEffect(() => {
     setQuantity(1);
-  }, [selectedVariant?.id]);
+  }, [selectedProduct?.id]);
 
   const handleAddToCart = () => {
-    if (selectedVariant && onAddToCart) {
-      onAddToCart(selectedVariant.id, quantity);
+    if (onAddToCart && selectedProduct) {
+      onAddToCart(selectedProduct.id, quantity);
     }
   };
 
   const handleNotifyMe = () => {
-    if (selectedVariant && notifyEmail && onNotifyMe) {
-      onNotifyMe(selectedVariant.id, notifyEmail);
+    if (selectedProduct && notifyEmail && onNotifyMe) {
+      onNotifyMe(selectedProduct.id, notifyEmail);
       setNotifyEmail("");
     }
   };
 
   return (
-    <section className="py-12 bg-background">
-      <div className="container mx-auto px-4">
-        <div className="max-w-2xl mx-auto space-y-8">
+    <section className='py-12 bg-background'>
+      <div className='container mx-auto px-4'>
+        <div className='max-w-2xl mx-auto space-y-8'>
           {/* Step 1: Select Colour */}
-          <div className="space-y-4">
-            <h2 className="text-lg font-semibold">1. Select Colour</h2>
-            <div className="flex gap-4">
-              {availableColors.map((color) => (
-                <button
-                  key={color}
-                  onClick={() => setSelectedColor(color)}
-                  className={cn(
-                    "flex-1 relative rounded-lg border-2 p-6 transition-all",
-                    "hover:border-primary/50",
-                    selectedColor === color
-                      ? "border-primary bg-primary/5"
-                      : "border-border"
-                  )}
-                >
-                  <div className="flex flex-col items-center gap-3">
-                    <div
-                      className={cn(
-                        "h-12 w-12 rounded-full border-2",
-                        color === "white"
-                          ? "bg-white border-gray-300"
-                          : "bg-gray-900 border-gray-700"
+          <div className='space-y-4'>
+            <h2 className='text-lg font-semibold'>1. Select Colour</h2>
+            <div className='flex gap-4'>
+              {(["white", "black"] as Color[]).map((color) => {
+                const available = isColorAvailable(color);
+                const inStock = isColorInStock(color);
+                const isDisabled = !available || !inStock;
+                return (
+                  <button
+                    key={color}
+                    onClick={() => !isDisabled && setSelectedColor(color)}
+                    disabled={isDisabled}
+                    className={cn(
+                      "flex-1 relative rounded-lg border-2 p-6 transition-all",
+                      !isDisabled && "hover:border-primary/50 cursor-pointer",
+                      isDisabled && "opacity-50 cursor-not-allowed",
+                      selectedColor === color
+                        ? "border-primary bg-primary/5"
+                        : "border-border"
+                    )}
+                  >
+                    <div className='flex flex-col items-center gap-3'>
+                      <div
+                        className={cn(
+                          "h-12 w-12 rounded-full border-2",
+                          color === "white"
+                            ? "bg-white border-gray-300"
+                            : "bg-gray-900 border-gray-700"
+                        )}
+                      />
+                      <span className='font-medium capitalize'>{color}</span>
+                      {!available && (
+                        <span className='text-xs text-muted-foreground'>
+                          Not available
+                        </span>
                       )}
-                    />
-                    <span className="font-medium capitalize">{color}</span>
-                  </div>
-                  {selectedColor === color && (
-                    <div className="absolute top-2 right-2">
-                      <Check className="h-5 w-5 text-primary" />
+                      {available && !inStock && (
+                        <Badge variant='destructive' className='text-xs'>
+                          Out of Stock
+                        </Badge>
+                      )}
                     </div>
-                  )}
-                </button>
-              ))}
+                    {selectedColor === color && (
+                      <div className='absolute top-2 right-2'>
+                        <Check className='h-5 w-5 text-primary' />
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          {/* Step 2: Select Material */}
+          {/* Step 2: Select Size */}
           <div
             className={cn(
               "space-y-4 transition-all duration-300",
               selectedColor ? "opacity-100" : "opacity-40 pointer-events-none"
             )}
           >
-            <h2 className="text-lg font-semibold">2. Select Material</h2>
-            <div className="flex gap-4">
-              {(selectedColor ? availableMaterials : ["gloss", "matte"] as Material[]).map((material) => (
-                <button
-                  key={material}
-                  onClick={() => selectedColor && setSelectedMaterial(material)}
-                  className={cn(
-                    "flex-1 relative rounded-lg border-2 p-6 transition-all",
-                    "hover:border-primary/50",
-                    selectedMaterial === material
-                      ? "border-primary bg-primary/5"
-                      : "border-border"
-                  )}
-                >
-                  <div className="flex flex-col items-center gap-2">
-                    <span className="font-medium capitalize">{material}</span>
-                    <span className="text-sm text-muted-foreground">
-                      {material === "gloss" ? "Reflective finish" : "Non-reflective finish"}
-                    </span>
-                  </div>
-                  {selectedMaterial === material && (
-                    <div className="absolute top-2 right-2">
-                      <Check className="h-5 w-5 text-primary" />
+            <h2 className='text-lg font-semibold'>2. Select Size</h2>
+            <div className='flex gap-4'>
+              {(["standard", "xl"] as Size[]).map((size) => {
+                const available = isSizeAvailable(size);
+                const inStock = isSizeInStock(size);
+                const isDisabled = !selectedColor || !available || !inStock;
+                return (
+                  <button
+                    key={size}
+                    onClick={() => !isDisabled && setSelectedSize(size)}
+                    disabled={isDisabled}
+                    className={cn(
+                      "flex-1 relative rounded-lg border-2 p-6 transition-all",
+                      selectedColor &&
+                        !isDisabled &&
+                        "hover:border-primary/50 cursor-pointer",
+                      isDisabled && "opacity-50 cursor-not-allowed",
+                      selectedSize === size
+                        ? "border-primary bg-primary/5"
+                        : "border-border"
+                    )}
+                  >
+                    <div className='flex flex-col items-center gap-2'>
+                      <span className='font-medium'>
+                        {sizeLabels[size].name}
+                      </span>
+                      <span className='text-sm text-muted-foreground'>
+                        {sizeLabels[size].dimensions}
+                      </span>
+                      {selectedColor && !available && (
+                        <span className='text-xs text-muted-foreground'>
+                          Not available
+                        </span>
+                      )}
+                      {selectedColor && available && !inStock && (
+                        <Badge variant='destructive' className='text-xs'>
+                          Out of Stock
+                        </Badge>
+                      )}
                     </div>
-                  )}
-                </button>
-              ))}
+                    {selectedSize === size && (
+                      <div className='absolute top-2 right-2'>
+                        <Check className='h-5 w-5 text-primary' />
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          {/* Step 3: Select Size */}
-          <div
-            className={cn(
-              "space-y-4 transition-all duration-300",
-              selectedMaterial ? "opacity-100" : "opacity-40 pointer-events-none"
-            )}
-          >
-            <h2 className="text-lg font-semibold">3. Select Size</h2>
-            <div className="flex gap-4">
-              {(selectedMaterial ? availableSizes : ["standard", "xl"] as Size[]).map((size) => (
-                <button
-                  key={size}
-                  onClick={() => selectedMaterial && setSelectedSize(size)}
-                  className={cn(
-                    "flex-1 relative rounded-lg border-2 p-6 transition-all",
-                    "hover:border-primary/50",
-                    selectedSize === size
-                      ? "border-primary bg-primary/5"
-                      : "border-border"
-                  )}
-                >
-                  <div className="flex flex-col items-center gap-2">
-                    <span className="font-medium">{sizeLabels[size].name}</span>
-                    <span className="text-sm text-muted-foreground">
-                      {sizeLabels[size].dimensions}
-                    </span>
-                  </div>
-                  {selectedSize === size && (
-                    <div className="absolute top-2 right-2">
-                      <Check className="h-5 w-5 text-primary" />
-                    </div>
-                  )}
-                </button>
-              ))}
+          {/* Product Image Display */}
+          {selectedProduct?.imageUrl && (
+            <div className='space-y-4'>
+              <div className='rounded-lg border bg-muted/30 overflow-hidden'>
+                <img
+                  src={selectedProduct.imageUrl}
+                  alt={selectedProduct.name}
+                  className='w-full h-64 object-contain bg-white'
+                />
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Step 4: Quantity and Add to Cart */}
           <div
             className={cn(
               "space-y-6 transition-all duration-300",
-              selectedVariant ? "opacity-100" : "opacity-40 pointer-events-none"
+              selectedProduct ? "opacity-100" : "opacity-40 pointer-events-none"
             )}
           >
-            {selectedVariant && (
+            {selectedProduct && (
               <>
                 {/* Selection Summary */}
-                <div className="rounded-lg border bg-muted/30 p-6 space-y-4">
-                  <div className="flex items-start justify-between">
+                <div className='rounded-lg border bg-muted/30 p-6 space-y-4'>
+                  <div className='flex items-start justify-between'>
                     <div>
-                      <h3 className="font-semibold">Your Selection</h3>
-                      <p className="text-muted-foreground capitalize">
-                        {selectedColor} {selectedMaterial} {selectedSize && sizeLabels[selectedSize].name} ACM Sheet
+                      <h3 className='font-semibold'>Your Selection</h3>
+                      <p className='text-muted-foreground capitalize'>
+                        {selectedProduct.name}
                       </p>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        SKU: {selectedVariant.sku}
+                      <p className='text-sm text-muted-foreground mt-1'>
+                        Part Number:{" "}
+                        {selectedProduct.partNumber || selectedProduct.id}
                       </p>
                     </div>
-                    <div className="text-right">
-                      <p className="text-xl font-bold">
-                        {formatPrice(selectedVariant.priceInCents)}
+                    <div className='text-right'>
+                      <p className='text-xl font-bold'>
+                        {formatPrice(selectedProduct.basePriceInCents)}
                       </p>
-                      <p className="text-sm text-muted-foreground">inc. GST each</p>
+                      <p className='text-sm text-muted-foreground'>
+                        inc. GST each
+                      </p>
                     </div>
                   </div>
 
                   {/* Stock Status */}
                   <div>
-                    <Badge variant={getStockStatus(selectedVariant.stock).variant}>
-                      {getStockStatus(selectedVariant.stock).label}
+                    <Badge
+                      variant={
+                        getStockStatus(
+                          selectedProduct.stock,
+                          selectedProduct.lowStockThreshold
+                        ).variant
+                      }
+                    >
+                      {
+                        getStockStatus(
+                          selectedProduct.stock,
+                          selectedProduct.lowStockThreshold
+                        ).label
+                      }
                     </Badge>
                   </div>
                 </div>
 
-                {selectedVariant.stock > 0 ? (
+                {isInStock ? (
                   <>
                     {/* Quantity Selector */}
-                    <div className="space-y-4">
-                      <h2 className="text-lg font-semibold">4. Select Quantity</h2>
-                      <div className="flex items-center gap-4">
-                        <div className="flex items-center border rounded-lg">
+                    <div className='space-y-4'>
+                      <h2 className='text-lg font-semibold'>
+                        3. Select Quantity
+                      </h2>
+                      <div className='flex items-center gap-4'>
+                        <div className='flex items-center border rounded-lg'>
                           <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-12 w-12 rounded-none rounded-l-lg"
-                            onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                            variant='ghost'
+                            size='icon'
+                            className='h-12 w-12 rounded-none rounded-l-lg'
+                            onClick={() =>
+                              setQuantity(Math.max(1, quantity - 1))
+                            }
                             disabled={quantity <= 1}
                           >
-                            <Minus className="h-4 w-4" />
+                            <Minus className='h-4 w-4' />
                           </Button>
                           <Input
-                            type="number"
+                            type='number'
                             min={1}
-                            max={selectedVariant.stock}
                             value={quantity}
                             onChange={(e) =>
                               setQuantity(
-                                Math.min(
-                                  selectedVariant.stock,
-                                  Math.max(1, parseInt(e.target.value) || 1)
-                                )
+                                Math.max(1, parseInt(e.target.value) || 1)
                               )
                             }
-                            className="h-12 w-20 text-center border-0 rounded-none focus-visible:ring-0"
+                            className='h-12 w-20 text-center border-0 rounded-none focus-visible:ring-0'
                           />
                           <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-12 w-12 rounded-none rounded-r-lg"
-                            onClick={() =>
-                              setQuantity(Math.min(selectedVariant.stock, quantity + 1))
-                            }
-                            disabled={quantity >= selectedVariant.stock}
+                            variant='ghost'
+                            size='icon'
+                            className='h-12 w-12 rounded-none rounded-r-lg'
+                            onClick={() => setQuantity(quantity + 1)}
                           >
-                            <Plus className="h-4 w-4" />
+                            <Plus className='h-4 w-4' />
                           </Button>
                         </div>
-                        <span className="text-sm text-muted-foreground">
-                          Max: {selectedVariant.stock}
+                        <span className='text-sm text-muted-foreground'>
+                          {currentStock} in stock
                         </span>
                       </div>
 
+                      {/* Backorder Notice */}
+                      <BackorderNotice
+                        availableStock={currentStock}
+                        requestedQuantity={quantity}
+                      />
+
                       {/* Bulk Discount Info */}
                       {discountPercent > 0 && (
-                        <div className="flex items-center gap-2 text-green-600">
-                          <Badge variant="secondary" className="bg-green-100 text-green-700">
+                        <div className='flex items-center gap-2 text-green-600'>
+                          <Badge
+                            variant='secondary'
+                            className='bg-green-100 text-green-700'
+                          >
                             {discountPercent}% bulk discount applied
                           </Badge>
                         </div>
@@ -356,58 +411,71 @@ export function ProductConfigurator({
 
                       {/* Next discount tier hint */}
                       {bulkDiscounts.some((d) => d.minQuantity > quantity) && (
-                        <p className="text-sm text-muted-foreground">
-                          💡 Order{" "}
-                          {bulkDiscounts.find((d) => d.minQuantity > quantity)?.minQuantity}+ sheets
-                          for{" "}
-                          {bulkDiscounts.find((d) => d.minQuantity > quantity)?.discountPercent}% off
+                        <p className='text-sm text-muted-foreground'>
+                          Order{" "}
+                          {
+                            bulkDiscounts.find((d) => d.minQuantity > quantity)
+                              ?.minQuantity
+                          }
+                          + sheets for{" "}
+                          {
+                            bulkDiscounts.find((d) => d.minQuantity > quantity)
+                              ?.discountPercent
+                          }
+                          % off
                         </p>
                       )}
                     </div>
 
                     {/* Subtotal and Add to Cart */}
-                    <div className="rounded-lg border bg-primary/5 p-6 space-y-4">
-                      <div className="flex items-center justify-between text-lg">
-                        <span className="font-medium">Subtotal</span>
-                        <div className="text-right">
+                    <div className='rounded-lg border bg-primary/5 p-6 space-y-4'>
+                      <div className='flex items-center justify-between text-lg'>
+                        <span className='font-medium'>Subtotal</span>
+                        <div className='text-right'>
                           {discountPercent > 0 && (
-                            <p className="text-sm text-muted-foreground line-through">
+                            <p className='text-sm text-muted-foreground line-through'>
                               {formatPrice(unitPrice * quantity)}
                             </p>
                           )}
-                          <p className="text-xl font-bold">{formatPrice(subtotal)}</p>
-                          <p className="text-sm text-muted-foreground">inc. GST</p>
+                          <p className='text-xl font-bold'>
+                            {formatPrice(subtotal)}
+                          </p>
+                          <p className='text-sm text-muted-foreground'>
+                            inc. GST
+                          </p>
                         </div>
                       </div>
 
                       <Button
-                        size="lg"
-                        className="w-full h-14 text-lg"
+                        size='lg'
+                        className='w-full h-14 text-lg'
                         onClick={handleAddToCart}
                       >
-                        <ShoppingCart className="mr-2 h-5 w-5" />
+                        <ShoppingCart className='mr-2 h-5 w-5' />
                         Add to Cart
                       </Button>
                     </div>
                   </>
                 ) : (
                   /* Out of Stock - Notify Me */
-                  <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-6 space-y-4">
-                    <div className="flex items-center gap-2">
-                      <Bell className="h-5 w-5" />
-                      <h3 className="font-semibold">Get notified when back in stock</h3>
+                  <div className='rounded-lg border border-destructive/20 bg-destructive/5 p-6 space-y-4'>
+                    <div className='flex items-center gap-2'>
+                      <Bell className='h-5 w-5' />
+                      <h3 className='font-semibold'>
+                        Get notified when back in stock
+                      </h3>
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      Enter your email and we&apos;ll let you know when this product is available
-                      again.
+                    <p className='text-sm text-muted-foreground'>
+                      Enter your email and we&apos;ll let you know when this
+                      product is available again.
                     </p>
-                    <div className="flex gap-2">
+                    <div className='flex gap-2'>
                       <Input
-                        type="email"
-                        placeholder="your@email.com"
+                        type='email'
+                        placeholder='your@email.com'
                         value={notifyEmail}
                         onChange={(e) => setNotifyEmail(e.target.value)}
-                        className="flex-1"
+                        className='flex-1'
                       />
                       <Button onClick={handleNotifyMe} disabled={!notifyEmail}>
                         Notify Me

@@ -1,12 +1,17 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { Toaster } from "@/components/ui/sonner";
+import { headers } from "next/headers";
+import { ToastProvider, ToastBridge } from "@/components/ui/toast";
 import { LayoutClient } from "@/components/layout-client";
-import { Footer } from "@/components/footer";
 import { Providers } from "@/components/providers";
 import { ComingSoon } from "@/components/coming-soon";
 import { auth } from "@/server/auth";
 import { siteConfig, generateOrganizationSchema } from "@/lib/seo";
+import { getActiveAnnouncements } from "@/server/actions/announcements";
+import {
+  getUnreadNotificationCount,
+  getUserNotifications,
+} from "@/server/actions/notifications";
 import "./globals.css";
 
 // Check if coming soon mode is enabled
@@ -98,7 +103,7 @@ export const metadata: Metadata = {
     "geo.region": "AU-WA",
     "geo.placename": "Perth",
     "geo.position": "-32.0567;115.9167",
-    "ICBM": "-32.0567, 115.9167",
+    ICBM: "-32.0567, 115.9167",
   },
 };
 
@@ -106,7 +111,7 @@ export const metadata: Metadata = {
 function JsonLd({ data }: { data: object }) {
   return (
     <script
-      type="application/ld+json"
+      type='application/ld+json'
       dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
     />
   );
@@ -117,22 +122,44 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const session = await auth();
-  
-  const user = session?.user
-    ? {
-        name: session.user.name || "",
-        email: session.user.email || "",
-        image: session.user.image || undefined,
-        isAdmin: session.user.role === "admin",
-      }
-    : null;
+  const [session, announcements, notifications, unreadCount] =
+    await Promise.all([
+      auth.api.getSession({ headers: await headers() }),
+      getActiveAnnouncements(),
+      getUserNotifications(),
+      getUnreadNotificationCount(),
+    ]);
 
-  const notificationCount = 0;
+  // Fetch fresh user data from database to get latest image
+  let user = null;
+  if (session?.user?.id) {
+    const { db } = await import("@/server/db");
+    const { users } = await import("@/server/schemas/users");
+    const { eq } = await import("drizzle-orm");
+
+    const dbUser = await db.query.users.findFirst({
+      where: eq(users.id, session.user.id),
+      columns: {
+        name: true,
+        email: true,
+        image: true,
+        role: true,
+      },
+    });
+
+    if (dbUser) {
+      user = {
+        name: dbUser.name || "",
+        email: dbUser.email || "",
+        image: dbUser.image || undefined,
+        isAdmin: dbUser.role === "admin",
+      };
+    }
+  }
 
   // Generate structured data
   const organizationSchema = generateOrganizationSchema();
-  
+
   const websiteSchema = {
     "@context": "https://schema.org",
     "@type": "WebSite",
@@ -157,30 +184,40 @@ export default async function RootLayout({
   // If coming soon mode is enabled, render only the coming soon page
   if (isComingSoonMode) {
     return (
-      <html lang="en-AU" suppressHydrationWarning>
+      <html lang='en-AU' suppressHydrationWarning>
         <head>
           {/* Structured Data */}
           <JsonLd data={organizationSchema} />
           <JsonLd data={websiteSchema} />
-          
+
           {/* Preconnect to external domains for performance */}
-          <link rel="preconnect" href="https://fonts.googleapis.com" />
-          <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-          <link rel="preconnect" href="https://use.typekit.net" crossOrigin="anonymous" />
-          
+          <link rel='preconnect' href='https://fonts.googleapis.com' />
+          <link
+            rel='preconnect'
+            href='https://fonts.gstatic.com'
+            crossOrigin='anonymous'
+          />
+          <link
+            rel='preconnect'
+            href='https://use.typekit.net'
+            crossOrigin='anonymous'
+          />
+
           {/* Adobe Fonts (Typekit) */}
-          <link rel="stylesheet" href="https://use.typekit.net/hcm0ntz.css" />
-          
+          <link rel='stylesheet' href='https://use.typekit.net/hcm0ntz.css' />
+
           {/* Favicon variations */}
-          <link rel="icon" href="/favicon.ico" sizes="any" />
-          <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+          <link rel='icon' href='/favicon.ico' sizes='any' />
+          <link rel='apple-touch-icon' href='/apple-touch-icon.png' />
         </head>
         <body
           className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}
         >
           <Providers>
-            <ComingSoon />
-            <Toaster position="top-right" />
+            <ToastProvider>
+              <ToastBridge />
+              <ComingSoon />
+            </ToastProvider>
           </Providers>
         </body>
       </html>
@@ -188,39 +225,53 @@ export default async function RootLayout({
   }
 
   return (
-    <html lang="en-AU" suppressHydrationWarning>
+    <html lang='en-AU' suppressHydrationWarning>
       <head>
         {/* Structured Data */}
         <JsonLd data={organizationSchema} />
         <JsonLd data={websiteSchema} />
-        
+
         {/* Preconnect to external domains for performance */}
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link rel="preconnect" href="https://use.typekit.net" crossOrigin="anonymous" />
-        
+        <link rel='preconnect' href='https://fonts.googleapis.com' />
+        <link
+          rel='preconnect'
+          href='https://fonts.gstatic.com'
+          crossOrigin='anonymous'
+        />
+        <link
+          rel='preconnect'
+          href='https://use.typekit.net'
+          crossOrigin='anonymous'
+        />
+
         {/* Adobe Fonts (Typekit) */}
-        <link rel="stylesheet" href="https://use.typekit.net/hcm0ntz.css" />
-        
+        <link rel='stylesheet' href='https://use.typekit.net/hcm0ntz.css' />
+
         {/* Favicon variations */}
-        <link rel="icon" href="/favicon.ico" sizes="any" />
-        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-        
+        <link rel='icon' href='/favicon.ico' sizes='any' />
+        <link rel='apple-touch-icon' href='/apple-touch-icon.png' />
+
         {/* Additional SEO meta tags */}
-        <meta name="geo.region" content="AU-WA" />
-        <meta name="geo.placename" content="Perth" />
-        <meta name="geo.position" content="-32.0567;115.9167" />
-        <meta name="ICBM" content="-32.0567, 115.9167" />
+        <meta name='geo.region' content='AU-WA' />
+        <meta name='geo.placename' content='Perth' />
+        <meta name='geo.position' content='-32.0567;115.9167' />
+        <meta name='ICBM' content='-32.0567, 115.9167' />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}
       >
         <Providers>
-          <LayoutClient user={user} notificationCount={notificationCount}>
-            {children}
-          </LayoutClient>
-          <Footer />
-          <Toaster position="top-right" />
+          <ToastProvider>
+            <ToastBridge />
+            <LayoutClient
+              user={user}
+              notifications={notifications}
+              unreadCount={unreadCount}
+              announcements={announcements}
+            >
+              {children}
+            </LayoutClient>
+          </ToastProvider>
         </Providers>
       </body>
     </html>

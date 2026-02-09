@@ -11,15 +11,18 @@ interface MobileBottomNavProps {
   onCartClick?: () => void;
 }
 
-export function MobileBottomNav({ cartCount = 0, onCartClick }: MobileBottomNavProps) {
+export function MobileBottomNav({
+  cartCount = 0,
+  onCartClick,
+}: MobileBottomNavProps) {
   const pathname = usePathname();
 
   const navItems = [
     {
-      href: "/",
+      href: "/products",
       label: "Products",
       icon: Package,
-      isActive: pathname === "/",
+      isActive: pathname === "/products" || pathname.startsWith("/products/"),
     },
     {
       href: "#cart",
@@ -44,11 +47,11 @@ export function MobileBottomNav({ cartCount = 0, onCartClick }: MobileBottomNavP
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background md:hidden">
-      <div className="flex items-center justify-around">
+    <nav className='border-t border-border bg-background'>
+      <div className='flex items-center justify-around'>
         {navItems.map((item) => {
           const Icon = item.icon;
-          
+
           if (item.onClick) {
             return (
               <button
@@ -59,18 +62,18 @@ export function MobileBottomNav({ cartCount = 0, onCartClick }: MobileBottomNavP
                   "text-muted-foreground hover:text-foreground"
                 )}
               >
-                <div className="relative">
-                  <Icon className="h-5 w-5" />
+                <div className='relative'>
+                  <Icon className='h-5 w-5' />
                   {item.badge && item.badge > 0 && (
-                    <Badge 
-                      variant="default" 
-                      className="absolute -top-2 -right-2 h-4 w-4 flex items-center justify-center p-0 text-[10px]"
+                    <Badge
+                      variant='default'
+                      className='absolute -top-2 -right-2 h-4 w-4 flex items-center justify-center p-0 text-[10px]'
                     >
                       {item.badge > 9 ? "9+" : item.badge}
                     </Badge>
                   )}
                 </div>
-                <span className="text-xs font-medium">{item.label}</span>
+                <span className='text-xs font-medium'>{item.label}</span>
               </button>
             );
           }
@@ -86,14 +89,14 @@ export function MobileBottomNav({ cartCount = 0, onCartClick }: MobileBottomNavP
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
-              <Icon className="h-5 w-5" />
-              <span className="text-xs font-medium">{item.label}</span>
+              <Icon className='h-5 w-5' />
+              <span className='text-xs font-medium'>{item.label}</span>
             </Link>
           );
         })}
       </div>
       {/* Safe area padding for devices with home indicator */}
-      <div className="h-safe-area-inset-bottom bg-background" />
+      <div className='h-safe-area-inset-bottom bg-background' />
     </nav>
   );
 }
