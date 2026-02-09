@@ -7,6 +7,8 @@ import * as deliveries from "../schemas/deliveries";
 import * as notifications from "../schemas/notifications";
 import * as cart from "../schemas/cart";
 import * as subscribers from "../schemas/subscribers";
+import * as announcements from "../schemas/announcements";
+import * as discountCodes from "../schemas/discount-codes";
 
 const sql = neon(process.env.DATABASE_URL!);
 
@@ -19,6 +21,8 @@ export const db = drizzle(sql, {
     ...notifications,
     ...cart,
     ...subscribers,
+    ...announcements,
+    ...discountCodes,
   },
 });
 

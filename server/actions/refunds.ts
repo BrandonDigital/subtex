@@ -2,6 +2,7 @@
 
 import { db } from "../db";
 import { auth } from "../auth";
+import { headers } from "next/headers";
 import { orders, refundRequests, orderStatusHistory } from "../schemas/orders";
 import { users } from "../schemas/users";
 import { eq, and, desc } from "drizzle-orm";
@@ -12,7 +13,7 @@ import { sendEmail } from "./email";
 // ============ AUTH HELPERS ============
 
 async function requireAuth() {
-  const session = await auth();
+  const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) {
     throw new Error("Unauthorized");
   }
@@ -20,11 +21,12 @@ async function requireAuth() {
 }
 
 async function requireAdmin() {
-  const session = await auth();
-  if (!session?.user || session.user.role !== "admin") {
+  const session = await auth.api.getSession({ headers: await headers() });
+  const user = session?.user as { id: string; role?: string } | undefined;
+  if (!user || user.role !== "admin") {
     throw new Error("Unauthorized: Admin access required");
   }
-  return session.user;
+  return user;
 }
 
 // ============ USER ACTIONS ============
@@ -47,7 +49,11 @@ export async function requestRefund(
   }
 
   // Check if order is eligible for refund
-  if (!["paid", "processing", "shipped", "delivered", "collected"].includes(order.status)) {
+  if (
+    !["paid", "processing", "shipped", "delivered", "collected"].includes(
+      order.status
+    )
+  ) {
     return { success: false, error: "This order is not eligible for a refund" };
   }
 
@@ -60,30 +66,40 @@ export async function requestRefund(
   });
 
   if (existingRequest) {
-    return { success: false, error: "A refund request is already pending for this order" };
+    return {
+      success: false,
+      error: "A refund request is already pending for this order",
+    };
   }
 
   // Calculate max refundable amount
   const maxRefundable = order.totalInCents - order.refundedAmountInCents;
-  const amountToRequest = requestedAmountInCents 
+  const amountToRequest = requestedAmountInCents
     ? Math.min(requestedAmountInCents, maxRefundable)
     : maxRefundable;
 
   if (amountToRequest <= 0) {
-    return { success: false, error: "This order has already been fully refunded" };
+    return {
+      success: false,
+      error: "This order has already been fully refunded",
+    };
   }
 
   // Create refund request
-  const [request] = await db.insert(refundRequests).values({
-    orderId,
-    userId: user.id,
-    reason,
-    requestedAmountInCents: amountToRequest,
-    status: "pending",
-  }).returning();
+  const [request] = await db
+    .insert(refundRequests)
+    .values({
+      orderId,
+      userId: user.id,
+      reason,
+      requestedAmountInCents: amountToRequest,
+      status: "pending",
+    })
+    .returning();
 
   // Update order status
-  await db.update(orders)
+  await db
+    .update(orders)
     .set({ status: "refund_requested", updatedAt: new Date() })
     .where(eq(orders.id, orderId));
 
@@ -117,7 +133,9 @@ export async function getUserRefundRequests() {
 
 // ============ ADMIN ACTIONS ============
 
-export async function getRefundRequests(status?: "pending" | "approved" | "rejected" | "processed") {
+export async function getRefundRequests(
+  status?: "pending" | "approved" | "rejected" | "processed"
+) {
   await requireAdmin();
 
   const requests = await db.query.refundRequests.findMany({
@@ -158,14 +176,22 @@ export async function approveRefund(
   }
 
   if (request.status !== "pending") {
-    return { success: false, error: "This refund request has already been processed" };
+    return {
+      success: false,
+      error: "This refund request has already been processed",
+    };
   }
 
   const order = request.order;
   const maxRefundable = order.totalInCents - order.refundedAmountInCents;
 
   if (approvedAmountInCents > maxRefundable) {
-    return { success: false, error: `Maximum refundable amount is $${(maxRefundable / 100).toFixed(2)}` };
+    return {
+      success: false,
+      error: `Maximum refundable amount is $${(maxRefundable / 100).toFixed(
+        2
+      )}`,
+    };
   }
 
   // Process refund through Stripe
@@ -186,7 +212,8 @@ export async function approveRefund(
     });
 
     // Update refund request
-    await db.update(refundRequests)
+    await db
+      .update(refundRequests)
       .set({
         status: "processed",
         approvedAmountInCents,
@@ -198,15 +225,21 @@ export async function approveRefund(
       .where(eq(refundRequests.id, requestId));
 
     // Update order
-    const newRefundedAmount = order.refundedAmountInCents + approvedAmountInCents;
+    const newRefundedAmount =
+      order.refundedAmountInCents + approvedAmountInCents;
     const isFullRefund = newRefundedAmount >= order.totalInCents;
 
-    await db.update(orders)
+    await db
+      .update(orders)
       .set({
         refundedAmountInCents: newRefundedAmount,
         stripeRefundId: refund.id,
         refundedAt: new Date(),
-        status: isFullRefund ? "refunded" : order.status === "refund_requested" ? "paid" : order.status,
+        status: isFullRefund
+          ? "refunded"
+          : order.status === "refund_requested"
+          ? "paid"
+          : order.status,
         updatedAt: new Date(),
       })
       .where(eq(orders.id, order.id));
@@ -215,7 +248,9 @@ export async function approveRefund(
     await db.insert(orderStatusHistory).values({
       orderId: order.id,
       status: isFullRefund ? "refunded" : order.status,
-      note: `Refund of $${(approvedAmountInCents / 100).toFixed(2)} processed${adminNotes ? `: ${adminNotes}` : ""}`,
+      note: `Refund of $${(approvedAmountInCents / 100).toFixed(2)} processed${
+        adminNotes ? `: ${adminNotes}` : ""
+      }`,
       changedBy: admin.id,
     });
 
@@ -241,10 +276,7 @@ export async function approveRefund(
   }
 }
 
-export async function rejectRefund(
-  requestId: string,
-  adminNotes: string
-) {
+export async function rejectRefund(requestId: string, adminNotes: string) {
   const admin = await requireAdmin();
 
   const request = await db.query.refundRequests.findFirst({
@@ -260,11 +292,15 @@ export async function rejectRefund(
   }
 
   if (request.status !== "pending") {
-    return { success: false, error: "This refund request has already been processed" };
+    return {
+      success: false,
+      error: "This refund request has already been processed",
+    };
   }
 
   // Update refund request
-  await db.update(refundRequests)
+  await db
+    .update(refundRequests)
     .set({
       status: "rejected",
       adminNotes,
@@ -277,8 +313,9 @@ export async function rejectRefund(
   // Restore order status (remove refund_requested status)
   const order = request.order;
   const previousStatus = order.paidAt ? "paid" : "pending";
-  
-  await db.update(orders)
+
+  await db
+    .update(orders)
     .set({
       status: previousStatus,
       updatedAt: new Date(),
@@ -320,7 +357,7 @@ async function sendRefundProcessedEmail(
   isFullRefund: boolean
 ) {
   const amount = (amountInCents / 100).toFixed(2);
-  
+
   return sendEmail({
     to: email,
     subject: `Your refund of $${amount} has been processed`,
@@ -341,12 +378,18 @@ async function sendRefundProcessedEmail(
               <div style="background: #f4f4f5; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
                 <p style="margin: 0; color: #52525b;"><strong>Refund Amount:</strong> $${amount} AUD</p>
                 <p style="margin: 8px 0 0 0; color: #52525b;"><strong>Order:</strong> #${orderNumber}</p>
-                ${isFullRefund ? '<p style="margin: 8px 0 0 0; color: #16a34a;"><strong>Full refund issued</strong></p>' : ""}
+                ${
+                  isFullRefund
+                    ? '<p style="margin: 8px 0 0 0; color: #16a34a;"><strong>Full refund issued</strong></p>'
+                    : ""
+                }
               </div>
               <p style="color: #52525b; line-height: 1.6; margin: 0 0 20px 0;">
                 The refund will be credited to your original payment method within 5-10 business days.
               </p>
-              <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3004'}/orders" style="display: inline-block; background: #18181b; color: white; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 500;">
+              <a href="${
+                process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3004"
+              }/orders" style="display: inline-block; background: #18181b; color: white; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 500;">
                 View Orders
               </a>
               <hr style="border: none; border-top: 1px solid #e4e4e7; margin: 30px 0;">
@@ -394,7 +437,9 @@ async function sendRefundRejectedEmail(
               <p style="color: #52525b; line-height: 1.6; margin: 0 0 20px 0;">
                 If you have any questions or would like to discuss this further, please contact us.
               </p>
-              <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3004'}/contact" style="display: inline-block; background: #18181b; color: white; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 500;">
+              <a href="${
+                process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3004"
+              }/contact" style="display: inline-block; background: #18181b; color: white; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 500;">
                 Contact Us
               </a>
               <hr style="border: none; border-top: 1px solid #e4e4e7; margin: 30px 0;">

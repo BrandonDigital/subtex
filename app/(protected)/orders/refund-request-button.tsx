@@ -16,7 +16,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { requestRefund } from "@/server/actions/refunds";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/toast";
 
 interface RefundRequestButtonProps {
   orderId: string;

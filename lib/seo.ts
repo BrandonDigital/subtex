@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 
 export const siteConfig = {
   name: "Subtex",
-  description: "Perth's local supplier of premium ACM sheets for signage, cladding, and architectural applications. Quality aluminium composite panels with local delivery across Perth, Western Australia.",
+  description: "Perth's local supplier of premium ACM sheets for signage, trailer alignment, caravan panels, and kitchen splashboards. Quality aluminium composite panels with local delivery across Perth, Western Australia. Note: Not fireproof, not for building cladding.",
   url: process.env.NEXT_PUBLIC_APP_URL || "https://subtex.com.au",
   ogImage: "/og-image.jpg",
   creator: "Subtex",
@@ -69,10 +69,10 @@ export const siteConfig = {
       longitude: 115.9167,
     },
     phone: "", // Add phone when available
-    email: "info@subtex.com.au",
+    email: "sales@subtex.com.au",
     priceRange: "$$",
     openingHours: [
-      { days: "Monday-Friday", hours: "08:00-17:00" },
+      { days: "Monday-Friday", hours: "08:00-15:00" },
       { days: "Saturday", hours: "By appointment" },
     ],
   },
@@ -212,7 +212,7 @@ export function generateOrganizationSchema() {
           itemOffered: {
             "@type": "Product",
             name: "White Gloss ACM Sheet",
-            description: "Premium white gloss aluminium composite panel for signage and cladding",
+            description: "Premium white gloss aluminium composite panel for signage, trailers, caravans, and splashboards",
           },
         },
         {
@@ -220,7 +220,7 @@ export function generateOrganizationSchema() {
           itemOffered: {
             "@type": "Product",
             name: "Black Matte ACM Sheet",
-            description: "Premium black matte aluminium composite panel for signage and cladding",
+            description: "Premium black matte aluminium composite panel for signage, trailers, caravans, and splashboards",
           },
         },
       ],
@@ -331,13 +331,16 @@ export function generateWebPageSchema({
 export const seoContent = {
   homepage: {
     title: "ACM Sheets Perth | Aluminium Composite Panels | Subtex",
-    description: "Perth's trusted supplier of premium ACM sheets for signage and cladding. White & black, gloss & matte finishes. Local delivery across Perth, WA. Bulk discounts available.",
+    description: "Perth's trusted supplier of premium ACM sheets for signage, trailer alignment, caravan panels & kitchen splashboards. White & black, gloss & matte finishes. Local delivery across Perth, WA. Note: Not for building cladding.",
     h1: "Perth Local ACM Sheets",
     keywords: [
       "ACM sheets Perth",
       "aluminium composite panels Perth",
       "signage materials Perth",
       "ACM supplier Western Australia",
+      "ACM trailer signage",
+      "caravan ACM panels",
+      "kitchen splashboard ACM",
     ],
   },
   contact: {
@@ -388,7 +391,7 @@ export const seoContent = {
 export const acmFAQs = [
   {
     question: "What are ACM sheets?",
-    answer: "ACM (Aluminium Composite Material) sheets consist of two thin aluminium layers bonded to a non-aluminium core. They are lightweight, durable, and ideal for signage, cladding, and architectural applications. ACM panels offer excellent flatness, weather resistance, and are easy to fabricate.",
+    answer: "ACM (Aluminium Composite Material) sheets consist of two thin aluminium layers bonded to a polyethylene core. They are lightweight, durable, and ideal for signage, trailer panels, caravan exteriors, and kitchen splashboards. ACM panels offer excellent flatness, weather resistance, and are easy to fabricate. Note: PE core ACM is not fireproof and cannot be used as building cladding.",
   },
   {
     question: "What sizes do ACM sheets come in?",
@@ -400,11 +403,15 @@ export const acmFAQs = [
   },
   {
     question: "What are ACM sheets used for?",
-    answer: "ACM sheets are commonly used for outdoor and indoor signage, building cladding and facades, shopfronts, exhibition displays, interior wall panels, and architectural features. They are popular in the signage industry due to their durability and professional appearance.",
+    answer: "ACM sheets are commonly used for outdoor and indoor signage, trailer alignment and signage, caravan exterior panels, kitchen splashboards and backsplashes, shopfronts, exhibition displays, and decorative wall panels. They are popular due to their durability and professional flat finish.",
+  },
+  {
+    question: "Can ACM sheets be used as building cladding?",
+    answer: "No, our ACM sheets have a polyethylene (PE) core and are NOT fireproof. They cannot be used as external building cladding due to Australian fire safety regulations. ACM with PE core is not compliant with the National Construction Code for building facades. For cladding applications, fire-rated (FR) panels with mineral cores are required.",
   },
   {
     question: "Are ACM sheets suitable for outdoor use?",
-    answer: "Yes, ACM sheets are highly suitable for outdoor applications. They are weather-resistant, UV-stable, and can withstand various environmental conditions. They are commonly used for outdoor signage, building facades, and external cladding.",
+    answer: "Yes, ACM sheets are highly suitable for outdoor applications. They are weather-resistant, UV-stable, and can withstand various environmental conditions. They are commonly used for outdoor signage, trailer signage, and caravan exteriors. However, our PE core ACM cannot be used as building cladding due to fire safety regulations.",
   },
   {
     question: "Do you deliver ACM sheets in Perth?",

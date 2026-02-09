@@ -30,15 +30,25 @@ export default function TermsPage() {
     <>
       <JsonLd data={breadcrumbSchema} />
 
-      <div className="py-12">
-        <div className="container mx-auto px-4">
-          <div className="max-w-3xl mx-auto prose prose-zinc dark:prose-invert">
-            <h1>Terms & Conditions</h1>
-            <p className="lead">
+      {/* Page Header */}
+      <div className="bg-zinc-50 border-b">
+        <div className="container mx-auto px-4 py-16 sm:py-20">
+          <div className="max-w-3xl mx-auto text-center">
+            <h1 className="text-4xl sm:text-5xl font-semibold text-zinc-900 mb-4 tracking-tight">
+              Terms & Conditions
+            </h1>
+            <p className="text-lg sm:text-xl text-zinc-600 max-w-2xl mx-auto">
               Please read these terms and conditions carefully before purchasing ACM sheets from Subtex.
             </p>
-            <p className="text-sm text-muted-foreground">Last updated: January 2026</p>
+            <p className="text-sm text-zinc-400 mt-4">Last updated: January 2026</p>
+          </div>
+        </div>
+      </div>
 
+      {/* Content */}
+      <div className="py-12 sm:py-16">
+        <div className="container mx-auto px-4">
+          <div className="max-w-3xl mx-auto prose prose-zinc dark:prose-invert prose-lg">
             <h2>1. General</h2>
             <p>
               These terms and conditions govern your purchase of aluminium composite material (ACM) sheets

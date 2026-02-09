@@ -10,6 +10,13 @@ interface SendEmailOptions {
 }
 
 export async function sendEmail({ to, subject, html, text }: SendEmailOptions) {
+  console.log("sendEmail called:", {
+    to,
+    subject,
+    from: FROM_EMAIL,
+    resendConfigured: !!resend,
+  });
+
   if (!resend) {
     console.log("Email skipped (Resend not configured):", { to, subject });
     return { success: false, error: "Email service not configured" };
@@ -23,6 +30,7 @@ export async function sendEmail({ to, subject, html, text }: SendEmailOptions) {
       html,
       text,
     });
+    console.log("Resend API response:", { data, error });
 
     if (error) {
       console.error("Email error:", error);
@@ -64,7 +72,7 @@ export async function sendWelcomeEmail(email: string, name: string) {
                 <li>Get notified when products are back in stock</li>
                 <li>Manage your delivery preferences</li>
               </ul>
-              <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3004'}" style="display: inline-block; background: #18181b; color: white; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 500;">
+              <a href="${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3004"}" style="display: inline-block; background: #18181b; color: white; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 500;">
                 Start Shopping
               </a>
               <hr style="border: none; border-top: 1px solid #e4e4e7; margin: 30px 0;">
@@ -77,7 +85,7 @@ export async function sendWelcomeEmail(email: string, name: string) {
         </body>
       </html>
     `,
-    text: `Welcome to Subtex, ${name}!\n\nThank you for creating an account with us. We're Perth's local supplier of premium ACM sheets.\n\nVisit ${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3004'} to start shopping.`,
+    text: `Welcome to Subtex, ${name}!\n\nThank you for creating an account with us. We're Perth's local supplier of premium ACM sheets.\n\nVisit ${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3004"} to start shopping.`,
   });
 }
 
@@ -87,7 +95,7 @@ export async function sendOrderConfirmationEmail(
   name: string,
   orderId: string,
   items: { name: string; quantity: number; price: string }[],
-  total: string
+  total: string,
 ) {
   const itemsHtml = items
     .map(
@@ -97,7 +105,7 @@ export async function sendOrderConfirmationEmail(
           <td style="padding: 12px 0; border-bottom: 1px solid #e4e4e7; text-align: center;">${item.quantity}</td>
           <td style="padding: 12px 0; border-bottom: 1px solid #e4e4e7; text-align: right;">${item.price}</td>
         </tr>
-      `
+      `,
     )
     .join("");
 
@@ -139,7 +147,7 @@ export async function sendOrderConfirmationEmail(
                   </tr>
                 </tfoot>
               </table>
-              <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3004'}/orders" style="display: inline-block; background: #18181b; color: white; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 500;">
+              <a href="${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3004"}/orders" style="display: inline-block; background: #18181b; color: white; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 500;">
                 View Order
               </a>
               <hr style="border: none; border-top: 1px solid #e4e4e7; margin: 30px 0;">
@@ -159,7 +167,7 @@ export async function sendOrderConfirmationEmail(
 export async function sendBackInStockEmail(
   email: string,
   productName: string,
-  productUrl: string
+  productUrl: string,
 ) {
   return sendEmail({
     to: email,
@@ -187,7 +195,7 @@ export async function sendBackInStockEmail(
               <hr style="border: none; border-top: 1px solid #e4e4e7; margin: 30px 0;">
               <p style="color: #a1a1aa; font-size: 14px; margin: 0;">
                 You received this email because you signed up for stock notifications. 
-                <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3004'}/account" style="color: #52525b;">Manage preferences</a>
+                <a href="${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3004"}/account" style="color: #52525b;">Manage preferences</a>
               </p>
             </div>
           </div>
@@ -202,7 +210,7 @@ export async function sendLowStockAlertEmail(
   email: string,
   productName: string,
   sku: string,
-  currentStock: number
+  currentStock: number,
 ) {
   return sendEmail({
     to: email,
@@ -227,7 +235,7 @@ export async function sendLowStockAlertEmail(
                   <td style="padding: 8px 0; color: #18181b;">${productName}</td>
                 </tr>
                 <tr>
-                  <td style="padding: 8px 0; color: #52525b;"><strong>SKU:</strong></td>
+                  <td style="padding: 8px 0; color: #52525b;"><strong>Part Number:</strong></td>
                   <td style="padding: 8px 0; color: #18181b;">${sku}</td>
                 </tr>
                 <tr>
@@ -235,7 +243,7 @@ export async function sendLowStockAlertEmail(
                   <td style="padding: 8px 0; color: #dc2626; font-weight: bold;">${currentStock} units</td>
                 </tr>
               </table>
-              <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3004'}/dashboard/inventory" style="display: inline-block; background: #18181b; color: white; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 500;">
+              <a href="${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3004"}/dashboard/inventory" style="display: inline-block; background: #18181b; color: white; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 500;">
                 Manage Inventory
               </a>
             </div>
@@ -288,6 +296,45 @@ export async function sendVerificationCodeEmail(email: string, code: string) {
   });
 }
 
+// Subscription confirmation email
+export async function sendSubscriptionConfirmationEmail(email: string) {
+  return sendEmail({
+    to: email,
+    subject: "You're on the list!",
+    html: `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background-color: #f4f4f5;">
+          <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+            <div style="background: white; border-radius: 12px; padding: 40px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+              <h1 style="color: #18181b; margin: 0 0 20px 0; font-size: 24px;">You're on the list!</h1>
+              <p style="color: #52525b; line-height: 1.6; margin: 0 0 20px 0;">
+                Thanks for signing up! We'll let you know as soon as Subtex goes live.
+              </p>
+              <p style="color: #52525b; line-height: 1.6; margin: 0 0 20px 0;">
+                Reserve. Order. Pay. Collect. Get updates – all online. We're making it easy to order premium ACM sheets in Perth.
+              </p>
+              <p style="color: #52525b; line-height: 1.6; margin: 0;">
+                Stay tuned – we're launching soon!
+              </p>
+              <hr style="border: none; border-top: 1px solid #e4e4e7; margin: 30px 0;">
+              <p style="color: #a1a1aa; font-size: 14px; margin: 0;">
+                Subtex<br>
+                16 Brewer Rd, Canning Vale, Perth, WA, 6155
+              </p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `,
+    text: `You're on the list!\n\nThanks for signing up! We'll let you know as soon as Subtex goes live.\n\nReserve. Order. Pay. Collect. Get updates – all online. We're making it easy to order premium ACM sheets in Perth.\n\nStay tuned – we're launching soon!`,
+  });
+}
+
 // Launch notification email for subscribers
 export async function sendLaunchNotificationEmail(email: string) {
   return sendEmail({
@@ -316,7 +363,7 @@ export async function sendLaunchNotificationEmail(email: string) {
                 <li>Competitive trade pricing with bulk discounts</li>
                 <li>Fast local delivery across Western Australia</li>
               </ul>
-              <a href="${process.env.NEXT_PUBLIC_APP_URL || 'https://subtex.com.au'}" style="display: inline-block; background: #18181b; color: white; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 500;">
+              <a href="${process.env.NEXT_PUBLIC_APP_URL || "https://subtex.com.au"}" style="display: inline-block; background: #18181b; color: white; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 500;">
                 Start Shopping
               </a>
               <hr style="border: none; border-top: 1px solid #e4e4e7; margin: 30px 0;">
@@ -332,7 +379,57 @@ export async function sendLaunchNotificationEmail(email: string) {
         </body>
       </html>
     `,
-    text: `We're Live! 🎉\n\nGreat news! Subtex is now officially live and ready to serve you.\n\nVisit ${process.env.NEXT_PUBLIC_APP_URL || 'https://subtex.com.au'} to start shopping.\n\nSubtex - Perth's trusted supplier of premium ACM sheets.`,
+    text: `We're Live! 🎉\n\nGreat news! Subtex is now officially live and ready to serve you.\n\nVisit ${process.env.NEXT_PUBLIC_APP_URL || "https://subtex.com.au"} to start shopping.\n\nSubtex - Perth's trusted supplier of premium ACM sheets.`,
+  });
+}
+
+// Generated password email (admin created)
+export async function sendGeneratedPasswordEmail(
+  email: string,
+  name: string,
+  password: string,
+) {
+  return sendEmail({
+    to: email,
+    subject: "Your Subtex account password",
+    html: `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background-color: #f4f4f5;">
+          <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+            <div style="background: white; border-radius: 12px; padding: 40px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+              <h1 style="color: #18181b; margin: 0 0 20px 0; font-size: 24px;">Your new password</h1>
+              <p style="color: #52525b; line-height: 1.6; margin: 0 0 20px 0;">
+                Hi ${name}, a new password has been generated for your Subtex account.
+              </p>
+              <div style="background: #f4f4f5; border-radius: 12px; padding: 24px; text-align: center; margin-bottom: 20px;">
+                <p style="margin: 0 0 8px 0; color: #52525b; font-size: 14px;">Your temporary password:</p>
+                <span style="font-size: 24px; font-weight: bold; font-family: monospace; color: #18181b; background: white; padding: 8px 16px; border-radius: 8px; display: inline-block;">${password}</span>
+              </div>
+              <p style="color: #52525b; line-height: 1.6; margin: 0 0 20px 0;">
+                For security, we recommend changing this password after you sign in.
+              </p>
+              <a href="${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3004"}/sign-in" style="display: inline-block; background: #18181b; color: white; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 500;">
+                Sign In
+              </a>
+              <hr style="border: none; border-top: 1px solid #e4e4e7; margin: 30px 0;">
+              <p style="color: #a1a1aa; font-size: 14px; margin: 0;">
+                If you didn't expect this email, please contact support immediately.
+              </p>
+              <p style="color: #a1a1aa; font-size: 14px; margin: 16px 0 0 0;">
+                Subtex<br>
+                16 Brewer Rd, Canning Vale, Perth, WA, 6155
+              </p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `,
+    text: `Hi ${name},\n\nA new password has been generated for your Subtex account.\n\nYour temporary password: ${password}\n\nFor security, we recommend changing this password after you sign in.\n\nSign in at: ${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3004"}/sign-in\n\nIf you didn't expect this email, please contact support immediately.\n\nSubtex\n16 Brewer Rd, Canning Vale, Perth, WA, 6155`,
   });
 }
 
@@ -375,5 +472,123 @@ export async function sendPasswordResetEmail(email: string, resetUrl: string) {
       </html>
     `,
     text: `Reset your Subtex password\n\nWe received a request to reset your password. Visit this link to choose a new password:\n\n${resetUrl}\n\nThis link expires in 1 hour.\n\nIf you didn't request a password reset, you can safely ignore this email.`,
+  });
+}
+
+// Contact form - email to sales team
+export async function sendContactFormToSales({
+  name,
+  email,
+  phone,
+  message,
+}: {
+  name: string;
+  email: string;
+  phone?: string;
+  message: string;
+}) {
+  const phoneDisplay = phone
+    ? `<p style="color: #52525b; margin: 0 0 8px 0;"><strong>Phone:</strong> ${phone}</p>`
+    : "";
+  const phoneText = phone ? `Phone: ${phone}\n` : "";
+
+  return sendEmail({
+    to: "sales@subtex.com.au",
+    subject: `New Contact Form Submission from ${name}`,
+    html: `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background-color: #f4f4f5;">
+          <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+            <div style="background: white; border-radius: 12px; padding: 40px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+              <h1 style="color: #18181b; margin: 0 0 20px 0; font-size: 24px;">New Contact Form Submission</h1>
+              
+              <div style="background: #f4f4f5; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                <h3 style="color: #18181b; margin: 0 0 12px 0; font-size: 16px;">Contact Details</h3>
+                <p style="color: #52525b; margin: 0 0 8px 0;"><strong>Name:</strong> ${name}</p>
+                <p style="color: #52525b; margin: 0 0 8px 0;"><strong>Email:</strong> <a href="mailto:${email}" style="color: #18181b;">${email}</a></p>
+                ${phoneDisplay}
+              </div>
+              
+              <div style="margin-bottom: 20px;">
+                <h3 style="color: #18181b; margin: 0 0 12px 0; font-size: 16px;">Message</h3>
+                <p style="color: #52525b; line-height: 1.6; margin: 0; white-space: pre-wrap; background: #f9fafb; padding: 16px; border-radius: 8px; border-left: 4px solid #18181b;">${message}</p>
+              </div>
+              
+              <a href="mailto:${email}?subject=Re: Your inquiry to Subtex" style="display: inline-block; background: #18181b; color: white; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 500;">
+                Reply to ${name}
+              </a>
+              
+              <hr style="border: none; border-top: 1px solid #e4e4e7; margin: 30px 0;">
+              <p style="color: #a1a1aa; font-size: 14px; margin: 0;">
+                This message was sent via the Subtex website contact form.
+              </p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `,
+    text: `New Contact Form Submission\n\nName: ${name}\nEmail: ${email}\n${phoneText}\nMessage:\n${message}`,
+  });
+}
+
+// Contact form - confirmation email to user
+export async function sendContactFormConfirmation({
+  name,
+  email,
+  message,
+}: {
+  name: string;
+  email: string;
+  message: string;
+}) {
+  return sendEmail({
+    to: email,
+    subject: "We've received your message - Subtex",
+    html: `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background-color: #f4f4f5;">
+          <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+            <div style="background: white; border-radius: 12px; padding: 40px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+              <h1 style="color: #18181b; margin: 0 0 20px 0; font-size: 24px;">Thanks for reaching out, ${name}!</h1>
+              
+              <p style="color: #52525b; line-height: 1.6; margin: 0 0 20px 0;">
+                We've received your message and will get back to you as soon as possible. Our team typically responds within 24 hours during business days.
+              </p>
+              
+              <div style="background: #f4f4f5; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                <h3 style="color: #18181b; margin: 0 0 12px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">Your Message</h3>
+                <p style="color: #52525b; line-height: 1.6; margin: 0; white-space: pre-wrap;">${message}</p>
+              </div>
+              
+              <p style="color: #52525b; line-height: 1.6; margin: 0 0 20px 0;">
+                In the meantime, feel free to browse our range of premium ACM sheets or check out our FAQs.
+              </p>
+              
+              <a href="${process.env.NEXT_PUBLIC_APP_URL || "https://subtex.com.au"}" style="display: inline-block; background: #18181b; color: white; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 500;">
+                Visit Our Website
+              </a>
+              
+              <hr style="border: none; border-top: 1px solid #e4e4e7; margin: 30px 0;">
+              <p style="color: #a1a1aa; font-size: 14px; margin: 0;">
+                Subtex<br>
+                16 Brewer Rd, Canning Vale, Perth, WA, 6155<br>
+                <a href="mailto:sales@subtex.com.au" style="color: #52525b;">sales@subtex.com.au</a>
+              </p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `,
+    text: `Thanks for reaching out, ${name}!\n\nWe've received your message and will get back to you as soon as possible. Our team typically responds within 24 hours during business days.\n\nYour Message:\n${message}\n\nSubtex\n16 Brewer Rd, Canning Vale, Perth, WA, 6155\nsales@subtex.com.au`,
   });
 }

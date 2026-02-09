@@ -6,13 +6,22 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { submitContactForm } from "@/server/actions/contact";
 
 interface ContactFormProps {
   showCard?: boolean;
   title?: string;
   description?: string;
-  onSubmit?: (data: ContactFormData) => Promise<void>;
+  initialName?: string;
+  initialEmail?: string;
+  initialPhone?: string;
 }
 
 export interface ContactFormData {
@@ -26,12 +35,14 @@ export function ContactForm({
   showCard = true,
   title = "Contact Us",
   description = "Have questions about our ACM sheets? Send us a message and we'll get back to you as soon as possible.",
-  onSubmit,
+  initialName = "",
+  initialEmail = "",
+  initialPhone = "",
 }: ContactFormProps) {
   const [formData, setFormData] = useState<ContactFormData>({
-    name: "",
-    email: "",
-    phone: "",
+    name: initialName,
+    email: initialEmail,
+    phone: initialPhone,
     message: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -39,7 +50,7 @@ export function ContactForm({
   const [error, setError] = useState<string | null>(null);
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
   ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -52,12 +63,18 @@ export function ContactForm({
     setError(null);
 
     try {
-      if (onSubmit) {
-        await onSubmit(formData);
-      } else {
-        // Simulate API call
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+      const result = await submitContactForm({
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone || undefined,
+        message: formData.message,
+      });
+
+      if (!result.success) {
+        setError(result.error || "Failed to send message. Please try again.");
+        return;
       }
+
       setIsSuccess(true);
       setFormData({ name: "", email: "", phone: "", message: "" });
       // Reset success message after 5 seconds
@@ -70,27 +87,27 @@ export function ContactForm({
   };
 
   const formContent = (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="name">Name *</Label>
+    <form onSubmit={handleSubmit} className='space-y-6'>
+      <div className='grid gap-4 sm:grid-cols-2'>
+        <div className='space-y-2'>
+          <Label htmlFor='name'>Name *</Label>
           <Input
-            id="name"
-            name="name"
-            placeholder="Your name"
+            id='name'
+            name='name'
+            placeholder='Your name'
             value={formData.name}
             onChange={handleChange}
             required
             disabled={isSubmitting}
           />
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="email">Email *</Label>
+        <div className='space-y-2'>
+          <Label htmlFor='email'>Email *</Label>
           <Input
-            id="email"
-            name="email"
-            type="email"
-            placeholder="your@email.com"
+            id='email'
+            name='email'
+            type='email'
+            placeholder='your@email.com'
             value={formData.email}
             onChange={handleChange}
             required
@@ -99,25 +116,25 @@ export function ContactForm({
         </div>
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="phone">Phone</Label>
+      <div className='space-y-2'>
+        <Label htmlFor='phone'>Phone</Label>
         <Input
-          id="phone"
-          name="phone"
-          type="tel"
-          placeholder="04XX XXX XXX"
+          id='phone'
+          name='phone'
+          type='tel'
+          placeholder='04XX XXX XXX'
           value={formData.phone}
           onChange={handleChange}
           disabled={isSubmitting}
         />
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="message">Message *</Label>
+      <div className='space-y-2'>
+        <Label htmlFor='message'>Message *</Label>
         <Textarea
-          id="message"
-          name="message"
-          placeholder="Tell us about your project or ask us a question..."
+          id='message'
+          name='message'
+          placeholder='Tell us about your project or ask us a question...'
           rows={5}
           value={formData.message}
           onChange={handleChange}
@@ -127,30 +144,37 @@ export function ContactForm({
       </div>
 
       {error && (
-        <div className="text-sm text-destructive bg-destructive/10 px-4 py-2 rounded-md">
+        <div className='text-sm text-destructive bg-destructive/10 px-4 py-2 rounded-md'>
           {error}
         </div>
       )}
 
       {isSuccess && (
-        <div className="text-sm text-green-600 bg-green-100 px-4 py-2 rounded-md">
+        <div className='text-sm text-green-600 bg-green-100 px-4 py-2 rounded-md'>
           Thank you for your message! We&apos;ll be in touch soon.
         </div>
       )}
 
-      <Button type="submit" size="lg" disabled={isSubmitting} className="w-full sm:w-auto">
-        {isSubmitting ? (
-          <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Sending...
-          </>
-        ) : (
-          <>
-            <Send className="mr-2 h-4 w-4" />
-            Send Message
-          </>
-        )}
-      </Button>
+      <div className='flex justify-end'>
+        <Button
+          type='submit'
+          size='lg'
+          disabled={isSubmitting}
+          className='w-full sm:w-auto'
+        >
+          {isSubmitting ? (
+            <>
+              <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+              Sending...
+            </>
+          ) : (
+            <>
+              <Send className='mr-2 h-4 w-4' />
+              Send Message
+            </>
+          )}
+        </Button>
+      </div>
     </form>
   );
 

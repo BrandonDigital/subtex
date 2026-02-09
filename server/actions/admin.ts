@@ -2,13 +2,12 @@
 
 import { db } from "../db";
 import { auth } from "../auth";
-import { 
-  products, 
-  productVariants, 
+import { headers } from "next/headers";
+import {
+  products,
   bulkDiscounts,
   stockSubscriptions,
   type NewProduct,
-  type NewProductVariant,
   type NewBulkDiscount,
 } from "../schemas/products";
 import { deliveryZones, type NewDeliveryZone } from "../schemas/deliveries";
@@ -18,110 +17,85 @@ import { sendBackInStockEmail, sendLowStockAlertEmail } from "./email";
 
 // Auth helper
 async function requireAdmin() {
-  const session = await auth();
-  if (!session?.user || session.user.role !== "admin") {
+  const session = await auth.api.getSession({ headers: await headers() });
+  const user = session?.user as
+    | { id: string; email: string; role?: string }
+    | undefined;
+  if (!user || user.role !== "admin") {
     throw new Error("Unauthorized: Admin access required");
   }
-  return session.user;
+  return user;
 }
 
 // ============ PRODUCTS ============
 
-export async function createProduct(data: Omit<NewProduct, "id" | "createdAt" | "updatedAt">) {
+export async function createProduct(
+  data: Omit<NewProduct, "id" | "createdAt" | "updatedAt">
+) {
   await requireAdmin();
-  
+
   const [product] = await db.insert(products).values(data).returning();
   revalidatePath("/dashboard/products");
+  revalidatePath("/dashboard/inventory");
   return product;
 }
 
 export async function updateProduct(id: string, data: Partial<NewProduct>) {
   await requireAdmin();
-  
+
   const [product] = await db
     .update(products)
     .set({ ...data, updatedAt: new Date() })
     .where(eq(products.id, id))
     .returning();
-  
+
   revalidatePath("/dashboard/products");
+  revalidatePath("/dashboard/inventory");
+  revalidatePath("/");
   return product;
 }
 
 export async function deleteProduct(id: string) {
   await requireAdmin();
-  
+
   await db.update(products).set({ active: false }).where(eq(products.id, id));
   revalidatePath("/dashboard/products");
-}
-
-// ============ VARIANTS ============
-
-export async function createVariant(data: Omit<NewProductVariant, "id" | "createdAt" | "updatedAt">) {
-  await requireAdmin();
-  
-  const [variant] = await db.insert(productVariants).values(data).returning();
-  revalidatePath("/dashboard/products");
-  revalidatePath("/");
-  return variant;
-}
-
-export async function updateVariant(id: string, data: Partial<NewProductVariant>) {
-  await requireAdmin();
-  
-  const [variant] = await db
-    .update(productVariants)
-    .set({ ...data, updatedAt: new Date() })
-    .where(eq(productVariants.id, id))
-    .returning();
-  
-  revalidatePath("/dashboard/products");
   revalidatePath("/dashboard/inventory");
-  revalidatePath("/");
-  return variant;
-}
-
-export async function deleteVariant(id: string) {
-  await requireAdmin();
-  
-  await db.update(productVariants).set({ active: false }).where(eq(productVariants.id, id));
-  revalidatePath("/dashboard/products");
-  revalidatePath("/");
 }
 
 // ============ INVENTORY ============
 
 export async function updateStock(
-  variantId: string, 
-  newStock: number, 
+  productId: string,
+  newStock: number,
   notifySubscribers: boolean = false
 ) {
   const admin = await requireAdmin();
-  
-  // Get current variant info
-  const variant = await db.query.productVariants.findFirst({
-    where: eq(productVariants.id, variantId),
+
+  // Get current product info
+  const product = await db.query.products.findFirst({
+    where: eq(products.id, productId),
   });
 
-  if (!variant) throw new Error("Variant not found");
+  if (!product) throw new Error("Product not found");
 
-  const wasOutOfStock = variant.stock === 0;
+  const wasOutOfStock = product.stock === 0;
   const isNowInStock = newStock > 0;
 
   // Update stock
   const [updated] = await db
-    .update(productVariants)
+    .update(products)
     .set({ stock: newStock, updatedAt: new Date() })
-    .where(eq(productVariants.id, variantId))
+    .where(eq(products.id, productId))
     .returning();
 
   // Check for low stock alert
-  if (newStock <= variant.lowStockThreshold && newStock > 0) {
+  if (newStock <= product.lowStockThreshold && newStock > 0) {
     // Send low stock alert to admin
     sendLowStockAlertEmail(
       admin.email || "",
-      `${variant.color} ${variant.material} ${variant.size} ACM Sheet`,
-      variant.sku,
+      product.name,
+      product.partNumber || product.id,
       newStock
     ).catch(console.error);
   }
@@ -130,17 +104,19 @@ export async function updateStock(
   if (notifySubscribers && wasOutOfStock && isNowInStock) {
     const subscribers = await db.query.stockSubscriptions.findMany({
       where: and(
-        eq(stockSubscriptions.variantId, variantId),
+        eq(stockSubscriptions.productId, productId),
         eq(stockSubscriptions.notified, false)
       ),
     });
 
-    const productName = `${variant.color} ${variant.material} ${variant.size} ACM Sheet`;
-    const productUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3004";
+    const productUrl =
+      process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3004";
 
     // Send emails to all subscribers
     for (const sub of subscribers) {
-      sendBackInStockEmail(sub.email, productName, productUrl).catch(console.error);
+      sendBackInStockEmail(sub.email, product.name, productUrl).catch(
+        console.error
+      );
     }
 
     // Mark as notified
@@ -148,7 +124,7 @@ export async function updateStock(
       await db
         .update(stockSubscriptions)
         .set({ notified: true })
-        .where(eq(stockSubscriptions.variantId, variantId));
+        .where(eq(stockSubscriptions.productId, productId));
     }
   }
 
@@ -157,52 +133,63 @@ export async function updateStock(
   return updated;
 }
 
-export async function updateHoldingFee(variantId: string, holdingFeeInCents: number) {
+export async function updateHoldingFee(
+  productId: string,
+  holdingFeeInCents: number
+) {
   await requireAdmin();
-  
-  const [variant] = await db
-    .update(productVariants)
+
+  const [product] = await db
+    .update(products)
     .set({ holdingFeeInCents, updatedAt: new Date() })
-    .where(eq(productVariants.id, variantId))
+    .where(eq(products.id, productId))
     .returning();
-  
+
   revalidatePath("/dashboard/inventory");
-  return variant;
+  return product;
 }
 
-export async function updateLowStockThreshold(variantId: string, threshold: number) {
+export async function updateLowStockThreshold(
+  productId: string,
+  threshold: number
+) {
   await requireAdmin();
-  
-  const [variant] = await db
-    .update(productVariants)
+
+  const [product] = await db
+    .update(products)
     .set({ lowStockThreshold: threshold, updatedAt: new Date() })
-    .where(eq(productVariants.id, variantId))
+    .where(eq(products.id, productId))
     .returning();
-  
+
   revalidatePath("/dashboard/inventory");
-  return variant;
+  return product;
 }
 
 // ============ BULK DISCOUNTS ============
 
-export async function createBulkDiscount(data: Omit<NewBulkDiscount, "id" | "createdAt" | "updatedAt">) {
+export async function createBulkDiscount(
+  data: Omit<NewBulkDiscount, "id" | "createdAt" | "updatedAt">
+) {
   await requireAdmin();
-  
+
   const [discount] = await db.insert(bulkDiscounts).values(data).returning();
   revalidatePath("/dashboard/products");
   revalidatePath("/");
   return discount;
 }
 
-export async function updateBulkDiscount(id: string, data: Partial<NewBulkDiscount>) {
+export async function updateBulkDiscount(
+  id: string,
+  data: Partial<NewBulkDiscount>
+) {
   await requireAdmin();
-  
+
   const [discount] = await db
     .update(bulkDiscounts)
     .set({ ...data, updatedAt: new Date() })
     .where(eq(bulkDiscounts.id, id))
     .returning();
-  
+
   revalidatePath("/dashboard/products");
   revalidatePath("/");
   return discount;
@@ -210,8 +197,11 @@ export async function updateBulkDiscount(id: string, data: Partial<NewBulkDiscou
 
 export async function deleteBulkDiscount(id: string) {
   await requireAdmin();
-  
-  await db.update(bulkDiscounts).set({ active: false }).where(eq(bulkDiscounts.id, id));
+
+  await db
+    .update(bulkDiscounts)
+    .set({ active: false })
+    .where(eq(bulkDiscounts.id, id));
   revalidatePath("/dashboard/products");
   revalidatePath("/");
 }
@@ -225,51 +215,59 @@ export async function getDeliveryZones() {
   });
 }
 
-export async function createDeliveryZone(data: Omit<NewDeliveryZone, "id" | "createdAt" | "updatedAt">) {
+export async function createDeliveryZone(
+  data: Omit<NewDeliveryZone, "id" | "createdAt" | "updatedAt">
+) {
   await requireAdmin();
-  
+
   const [zone] = await db.insert(deliveryZones).values(data).returning();
   revalidatePath("/dashboard/deliveries");
   return zone;
 }
 
-export async function updateDeliveryZone(id: string, data: Partial<NewDeliveryZone>) {
+export async function updateDeliveryZone(
+  id: string,
+  data: Partial<NewDeliveryZone>
+) {
   await requireAdmin();
-  
+
   const [zone] = await db
     .update(deliveryZones)
     .set({ ...data, updatedAt: new Date() })
     .where(eq(deliveryZones.id, id))
     .returning();
-  
+
   revalidatePath("/dashboard/deliveries");
   return zone;
 }
 
 export async function deleteDeliveryZone(id: string) {
   await requireAdmin();
-  
-  await db.update(deliveryZones).set({ active: false }).where(eq(deliveryZones.id, id));
+
+  await db
+    .update(deliveryZones)
+    .set({ active: false })
+    .where(eq(deliveryZones.id, id));
   revalidatePath("/dashboard/deliveries");
 }
 
 // ============ STOCK SUBSCRIBERS ============
 
-export async function getStockSubscribers(variantId: string) {
+export async function getStockSubscribers(productId: string) {
   await requireAdmin();
-  
+
   return db.query.stockSubscriptions.findMany({
     where: and(
-      eq(stockSubscriptions.variantId, variantId),
+      eq(stockSubscriptions.productId, productId),
       eq(stockSubscriptions.notified, false)
     ),
   });
 }
 
-export async function getStockSubscriberCount(variantId: string) {
+export async function getStockSubscriberCount(productId: string) {
   const subscribers = await db.query.stockSubscriptions.findMany({
     where: and(
-      eq(stockSubscriptions.variantId, variantId),
+      eq(stockSubscriptions.productId, productId),
       eq(stockSubscriptions.notified, false)
     ),
   });

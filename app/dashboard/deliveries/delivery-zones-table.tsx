@@ -6,7 +6,13 @@ import { Plus, Pencil, Trash2, Loader2, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -35,8 +41,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { createDeliveryZone, updateDeliveryZone, deleteDeliveryZone } from "@/server/actions/admin";
-import { toast } from "sonner";
+import {
+  createDeliveryZone,
+  updateDeliveryZone,
+  deleteDeliveryZone,
+} from "@/server/actions/admin";
+import { toast } from "@/components/ui/toast";
+import { DeliveryZoneMap } from "@/components/delivery-zone-map";
 
 interface DeliveryZone {
   id: string;
@@ -66,6 +77,9 @@ export function DeliveryZonesTable({ zones }: DeliveryZonesTableProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedZone, setSelectedZone] = useState<DeliveryZone | null>(null);
   const [zoneToDelete, setZoneToDelete] = useState<DeliveryZone | null>(null);
+  const [highlightedZone, setHighlightedZone] = useState<string>(
+    zones[0]?.id || ""
+  );
   const [formData, setFormData] = useState({
     name: "",
     radiusKm: 25,
@@ -124,7 +138,7 @@ export function DeliveryZonesTable({ zones }: DeliveryZonesTableProps) {
 
   const handleDelete = async () => {
     if (!zoneToDelete) return;
-    
+
     try {
       await deleteDeliveryZone(zoneToDelete.id);
       toast.success("Delivery zone deleted");
@@ -139,28 +153,49 @@ export function DeliveryZonesTable({ zones }: DeliveryZonesTableProps) {
 
   return (
     <>
+      {/* Delivery Zone Map */}
+      {zones.length > 0 && (
+        <Card className='mb-6'>
+          <CardHeader>
+            <CardTitle>Delivery Zone Map</CardTitle>
+            <CardDescription>
+              Visual overview of delivery zones from the warehouse
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <DeliveryZoneMap
+              deliveryZones={zones}
+              selectedZone={highlightedZone}
+              onZoneSelect={setHighlightedZone}
+            />
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4'>
             <div>
               <CardTitle>Delivery Zones</CardTitle>
-              <CardDescription>Configure local delivery areas and pricing</CardDescription>
+              <CardDescription>
+                Configure local delivery areas and pricing
+              </CardDescription>
             </div>
             <Button onClick={handleCreate}>
-              <Plus className="h-4 w-4 mr-2" />
+              <Plus className='h-4 w-4 mr-2' />
               Add Zone
             </Button>
           </div>
         </CardHeader>
         <CardContent>
           {zones.length === 0 ? (
-            <div className="text-center py-12">
-              <MapPin className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <p className="text-muted-foreground mb-4">
+            <div className='text-center py-12'>
+              <MapPin className='h-12 w-12 mx-auto text-muted-foreground mb-4' />
+              <p className='text-muted-foreground mb-4'>
                 No delivery zones configured yet.
               </p>
               <Button onClick={handleCreate}>
-                <Plus className="h-4 w-4 mr-2" />
+                <Plus className='h-4 w-4 mr-2' />
                 Add Your First Zone
               </Button>
             </div>
@@ -169,46 +204,60 @@ export function DeliveryZonesTable({ zones }: DeliveryZonesTableProps) {
               <TableHeader>
                 <TableRow>
                   <TableHead>Zone Name</TableHead>
-                  <TableHead className="text-center">Radius</TableHead>
-                  <TableHead className="text-right">Base Fee</TableHead>
-                  <TableHead className="text-right">Per Sheet</TableHead>
-                  <TableHead className="text-center">Min. Order</TableHead>
+                  <TableHead className='text-center'>Radius</TableHead>
+                  <TableHead className='text-right'>Base Fee</TableHead>
+                  <TableHead className='text-right'>Per Sheet</TableHead>
+                  <TableHead className='text-center'>Min. Order</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {zones.map((zone) => (
-                  <TableRow key={zone.id}>
-                    <TableCell className="font-medium">{zone.name}</TableCell>
-                    <TableCell className="text-center">{zone.radiusKm} km</TableCell>
-                    <TableCell className="text-right">{formatPrice(zone.baseFeeInCents)}</TableCell>
-                    <TableCell className="text-right">
+                  <TableRow
+                    key={zone.id}
+                    className={highlightedZone === zone.id ? "bg-muted/50" : ""}
+                    onMouseEnter={() => setHighlightedZone(zone.id)}
+                  >
+                    <TableCell className='font-medium'>{zone.name}</TableCell>
+                    <TableCell className='text-center'>
+                      {zone.radiusKm} km
+                    </TableCell>
+                    <TableCell className='text-right'>
+                      {formatPrice(zone.baseFeeInCents)}
+                    </TableCell>
+                    <TableCell className='text-right'>
                       {zone.perSheetFeeInCents > 0
                         ? formatPrice(zone.perSheetFeeInCents)
                         : "—"}
                     </TableCell>
-                    <TableCell className="text-center">{zone.minOrderSheets} sheet(s)</TableCell>
+                    <TableCell className='text-center'>
+                      {zone.minOrderSheets} sheet(s)
+                    </TableCell>
                     <TableCell>
                       <Badge variant={zone.active ? "default" : "secondary"}>
                         {zone.active ? "Active" : "Inactive"}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <div className="flex gap-2">
-                        <Button variant="ghost" size="icon" onClick={() => handleEdit(zone)}>
-                          <Pencil className="h-4 w-4" />
+                      <div className='flex gap-2'>
+                        <Button
+                          variant='ghost'
+                          size='icon'
+                          onClick={() => handleEdit(zone)}
+                        >
+                          <Pencil className='h-4 w-4' />
                         </Button>
                         <Button
-                          variant="ghost"
-                          size="icon"
-                          className="text-destructive"
+                          variant='ghost'
+                          size='icon'
+                          className='text-destructive'
                           onClick={() => {
                             setZoneToDelete(zone);
                             setDeleteDialogOpen(true);
                           }}
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Trash2 className='h-4 w-4' />
                         </Button>
                       </div>
                     </TableCell>
@@ -231,105 +280,123 @@ export function DeliveryZonesTable({ zones }: DeliveryZonesTableProps) {
                 Configure the delivery area and pricing.
               </DialogDescription>
             </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Zone Name</Label>
+            <div className='grid gap-4 py-4'>
+              <div className='space-y-2'>
+                <Label htmlFor='name'>Zone Name</Label>
                 <Input
-                  id="name"
-                  placeholder="e.g., Perth Metro"
+                  id='name'
+                  placeholder='e.g., Perth Metro'
                   value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
                   required
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="radiusKm">Radius (km)</Label>
+              <div className='grid grid-cols-2 gap-4'>
+                <div className='space-y-2'>
+                  <Label htmlFor='radiusKm'>Radius (km)</Label>
                   <Input
-                    id="radiusKm"
-                    type="number"
-                    min="1"
+                    id='radiusKm'
+                    type='number'
+                    min='1'
                     value={formData.radiusKm}
                     onChange={(e) =>
-                      setFormData({ ...formData, radiusKm: parseInt(e.target.value) || 1 })
+                      setFormData({
+                        ...formData,
+                        radiusKm: parseInt(e.target.value) || 1,
+                      })
                     }
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="minOrderSheets">Min. Sheets</Label>
+                <div className='space-y-2'>
+                  <Label htmlFor='minOrderSheets'>Min. Sheets</Label>
                   <Input
-                    id="minOrderSheets"
-                    type="number"
-                    min="1"
+                    id='minOrderSheets'
+                    type='number'
+                    min='1'
                     value={formData.minOrderSheets}
                     onChange={(e) =>
-                      setFormData({ ...formData, minOrderSheets: parseInt(e.target.value) || 1 })
+                      setFormData({
+                        ...formData,
+                        minOrderSheets: parseInt(e.target.value) || 1,
+                      })
                     }
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="baseFee">Base Fee (inc. GST)</Label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+              <div className='grid grid-cols-2 gap-4'>
+                <div className='space-y-2'>
+                  <Label htmlFor='baseFee'>Base Fee (inc. GST)</Label>
+                  <div className='relative'>
+                    <span className='absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground'>
                       $
                     </span>
                     <Input
-                      id="baseFee"
-                      type="number"
-                      step="0.01"
+                      id='baseFee'
+                      type='number'
+                      step='0.01'
                       value={(formData.baseFeeInCents / 100).toFixed(2)}
                       onChange={(e) =>
                         setFormData({
                           ...formData,
-                          baseFeeInCents: Math.round(parseFloat(e.target.value) * 100),
+                          baseFeeInCents: Math.round(
+                            parseFloat(e.target.value) * 100
+                          ),
                         })
                       }
-                      className="pl-7"
+                      className='pl-7'
                     />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="perSheetFee">Per Sheet Fee</Label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                <div className='space-y-2'>
+                  <Label htmlFor='perSheetFee'>Per Sheet Fee</Label>
+                  <div className='relative'>
+                    <span className='absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground'>
                       $
                     </span>
                     <Input
-                      id="perSheetFee"
-                      type="number"
-                      step="0.01"
+                      id='perSheetFee'
+                      type='number'
+                      step='0.01'
                       value={(formData.perSheetFeeInCents / 100).toFixed(2)}
                       onChange={(e) =>
                         setFormData({
                           ...formData,
-                          perSheetFeeInCents: Math.round(parseFloat(e.target.value) * 100),
+                          perSheetFeeInCents: Math.round(
+                            parseFloat(e.target.value) * 100
+                          ),
                         })
                       }
-                      className="pl-7"
+                      className='pl-7'
                     />
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-center justify-between">
-                <Label htmlFor="active">Active</Label>
+              <div className='flex items-center justify-between'>
+                <Label htmlFor='active'>Active</Label>
                 <Switch
-                  id="active"
+                  id='active'
                   checked={formData.active}
-                  onCheckedChange={(checked) => setFormData({ ...formData, active: checked })}
+                  onCheckedChange={(checked) =>
+                    setFormData({ ...formData, active: checked })
+                  }
                 />
               </div>
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+              <Button
+                type='button'
+                variant='outline'
+                onClick={() => setDialogOpen(false)}
+              >
                 Cancel
               </Button>
-              <Button type="submit" disabled={isLoading}>
-                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              <Button type='submit' disabled={isLoading}>
+                {isLoading && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
                 {selectedZone ? "Save Changes" : "Create Zone"}
               </Button>
             </DialogFooter>
@@ -342,13 +409,16 @@ export function DeliveryZonesTable({ zones }: DeliveryZonesTableProps) {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Delivery Zone</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete &quot;{zoneToDelete?.name}&quot;? This action cannot be
-              undone.
+              Are you sure you want to delete &quot;{zoneToDelete?.name}&quot;?
+              This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">
+            <AlertDialogAction
+              onClick={handleDelete}
+              className='bg-destructive text-destructive-foreground'
+            >
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>

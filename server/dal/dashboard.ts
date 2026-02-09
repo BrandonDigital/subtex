@@ -1,7 +1,8 @@
 import { db } from "../db";
 import { orders, orderItems } from "../schemas/orders";
-import { productVariants, stockSubscriptions } from "../schemas/products";
+import { products, stockSubscriptions } from "../schemas/products";
 import { deliveryQuotes } from "../schemas/deliveries";
+import { users } from "../schemas/users";
 import { eq, and, gte, lte, lt, sql, count, sum, desc } from "drizzle-orm";
 
 interface DateRange {
@@ -35,12 +36,13 @@ export interface RevenueChartData {
   revenue: number;
 }
 
-export interface TopSellingVariant {
-  variantId: string;
-  sku: string;
-  color: string;
-  material: string;
-  size: string;
+export interface TopSellingProduct {
+  productId: string;
+  partNumber: string | null;
+  name: string;
+  color: string | null;
+  material: string | null;
+  size: string | null;
   soldCount: number;
 }
 
@@ -115,7 +117,8 @@ export async function getDashboardMetrics(
   const previousRevenue = Number(previousData[0]?.totalRevenue || 0);
   const previousOrders = Number(previousData[0]?.orderCount || 0);
 
-  const currentAvgOrder = currentOrders > 0 ? currentRevenue / currentOrders : 0;
+  const currentAvgOrder =
+    currentOrders > 0 ? currentRevenue / currentOrders : 0;
   const previousAvgOrder =
     previousOrders > 0 ? previousRevenue / previousOrders : 0;
 
@@ -139,25 +142,23 @@ export async function getDashboardMetrics(
 }
 
 export async function getDashboardAlerts(): Promise<DashboardAlerts> {
-  // Low stock variants
+  // Low stock products
   const lowStockResult = await db
     .select({ count: count() })
-    .from(productVariants)
+    .from(products)
     .where(
       and(
-        sql`${productVariants.stock} > 0`,
-        sql`${productVariants.stock} <= ${productVariants.lowStockThreshold}`,
-        eq(productVariants.active, true)
+        sql`${products.stock} > 0`,
+        sql`${products.stock} <= ${products.lowStockThreshold}`,
+        eq(products.active, true)
       )
     );
 
-  // Out of stock variants
+  // Out of stock products
   const outOfStockResult = await db
     .select({ count: count() })
-    .from(productVariants)
-    .where(
-      and(eq(productVariants.stock, 0), eq(productVariants.active, true))
-    );
+    .from(products)
+    .where(and(eq(products.stock, 0), eq(products.active, true)));
 
   // Pending quote requests
   const pendingQuotesResult = await db
@@ -207,12 +208,7 @@ export async function getRevenueChartData(
       revenue: sum(orders.totalInCents),
     })
     .from(orders)
-    .where(
-      and(
-        gte(orders.paidAt, startDate),
-        eq(orders.status, "paid")
-      )
-    )
+    .where(and(gte(orders.paidAt, startDate), eq(orders.status, "paid")))
     .groupBy(sql`DATE(${orders.paidAt})`)
     .orderBy(sql`DATE(${orders.paidAt})`);
 
@@ -222,13 +218,14 @@ export async function getRevenueChartData(
   }));
 }
 
-export async function getTopSellingVariants(
+export async function getTopSellingProducts(
   limit: number
-): Promise<TopSellingVariant[]> {
+): Promise<TopSellingProduct[]> {
   const result = await db
     .select({
-      variantId: orderItems.variantId,
-      sku: orderItems.sku,
+      productId: orderItems.productId,
+      partNumber: orderItems.partNumber,
+      name: orderItems.name,
       color: orderItems.color,
       material: orderItems.material,
       size: orderItems.size,
@@ -238,8 +235,9 @@ export async function getTopSellingVariants(
     .innerJoin(orders, eq(orderItems.orderId, orders.id))
     .where(eq(orders.status, "paid"))
     .groupBy(
-      orderItems.variantId,
-      orderItems.sku,
+      orderItems.productId,
+      orderItems.partNumber,
+      orderItems.name,
       orderItems.color,
       orderItems.material,
       orderItems.size
@@ -248,8 +246,9 @@ export async function getTopSellingVariants(
     .limit(limit);
 
   return result.map((row) => ({
-    variantId: row.variantId,
-    sku: row.sku,
+    productId: row.productId,
+    partNumber: row.partNumber,
+    name: row.name,
     color: row.color,
     material: row.material,
     size: row.size,
@@ -287,23 +286,23 @@ export async function getOrdersByStatus(): Promise<OrdersByStatus> {
 export async function getInventoryStatus(): Promise<InventoryStatus> {
   const result = await db
     .select({
-      stock: productVariants.stock,
-      lowStockThreshold: productVariants.lowStockThreshold,
+      stock: products.stock,
+      lowStockThreshold: products.lowStockThreshold,
     })
-    .from(productVariants)
-    .where(eq(productVariants.active, true));
+    .from(products)
+    .where(eq(products.active, true));
 
   let inStock = 0;
   let lowStock = 0;
   let outOfStock = 0;
   let totalUnits = 0;
 
-  result.forEach((variant) => {
-    totalUnits += variant.stock;
+  result.forEach((product) => {
+    totalUnits += product.stock;
 
-    if (variant.stock === 0) {
+    if (product.stock === 0) {
       outOfStock++;
-    } else if (variant.stock <= variant.lowStockThreshold) {
+    } else if (product.stock <= product.lowStockThreshold) {
       lowStock++;
     } else {
       inStock++;
@@ -319,9 +318,81 @@ export async function getInventoryStatus(): Promise<InventoryStatus> {
 }
 
 export async function getRecentOrders(limit: number) {
-  return db
-    .select()
-    .from(orders)
-    .orderBy(desc(orders.createdAt))
+  return db.query.orders.findMany({
+    orderBy: [desc(orders.createdAt)],
+    limit,
+    with: {
+      user: {
+        columns: {
+          name: true,
+          email: true,
+        },
+      },
+    },
+  });
+}
+
+export interface RecentUser {
+  id: string;
+  email: string;
+  name: string | null;
+  image: string | null;
+  role: "user" | "admin";
+  emailVerified: boolean;
+  createdAt: Date;
+}
+
+export async function getRecentUsers(limit: number): Promise<RecentUser[]> {
+  const result = await db
+    .select({
+      id: users.id,
+      email: users.email,
+      name: users.name,
+      image: users.image,
+      role: users.role,
+      emailVerified: users.emailVerified,
+      createdAt: users.createdAt,
+    })
+    .from(users)
+    .orderBy(desc(users.createdAt))
     .limit(limit);
+
+  return result;
+}
+
+export async function getUserStats(): Promise<{
+  totalUsers: number;
+  newUsersThisWeek: number;
+  newUsersThisMonth: number;
+  verifiedUsers: number;
+}> {
+  const now = new Date();
+  const weekAgo = new Date(now);
+  weekAgo.setDate(weekAgo.getDate() - 7);
+  const monthAgo = new Date(now);
+  monthAgo.setDate(monthAgo.getDate() - 30);
+
+  const [totalResult, weekResult, monthResult, verifiedResult] =
+    await Promise.all([
+      db.select({ count: count() }).from(users),
+      db
+        .select({ count: count() })
+        .from(users)
+        .where(gte(users.createdAt, weekAgo)),
+      db
+        .select({ count: count() })
+        .from(users)
+        .where(gte(users.createdAt, monthAgo)),
+      db
+        .select({ count: count() })
+        .from(users)
+        .where(sql`${users.emailVerified} IS NOT NULL`),
+    ]);
+
+  return {
+    totalUsers: Number(totalResult[0]?.count || 0),
+    newUsersThisWeek: Number(weekResult[0]?.count || 0),
+    newUsersThisMonth: Number(monthResult[0]?.count || 0),
+    verifiedUsers: Number(verifiedResult[0]?.count || 0),
+  };
 }

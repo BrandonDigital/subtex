@@ -88,18 +88,24 @@ export default function ShippingPage() {
     <>
       <JsonLd data={breadcrumbSchema} />
 
-      <div className="py-12">
-        <div className="container mx-auto px-4">
-          {/* Header */}
-          <div className="text-center mb-12">
-            <h1 className="text-3xl sm:text-4xl font-bold mb-4">
-              ACM Sheet Delivery Options in Perth
+      {/* Page Header */}
+      <div className="bg-zinc-50 border-b">
+        <div className="container mx-auto px-4 py-16 sm:py-20">
+          <div className="max-w-3xl mx-auto text-center">
+            <h1 className="text-4xl sm:text-5xl font-semibold text-zinc-900 mb-4 tracking-tight">
+              Shipping & Delivery
             </h1>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
+            <p className="text-lg sm:text-xl text-zinc-600 max-w-2xl mx-auto">
               We offer multiple delivery options for ACM sheets across Perth and Western Australia. 
               Choose the option that best suits your project timeline and location.
             </p>
           </div>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="py-12 sm:py-16">
+        <div className="container mx-auto px-4">
 
           {/* Delivery Options Grid */}
           <div className="grid gap-6 md:grid-cols-2 mb-12">
@@ -123,7 +129,7 @@ export default function ShippingPage() {
                     <ul className="space-y-2">
                       {option.features.map((feature, index) => (
                         <li key={index} className="flex items-start gap-2 text-sm text-muted-foreground">
-                          <span className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                          <span className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
                           {feature}
                         </li>
                       ))}
@@ -138,7 +144,7 @@ export default function ShippingPage() {
           <Card className="bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900">
             <CardContent className="pt-6">
               <div className="flex gap-4">
-                <AlertCircle className="h-6 w-6 text-amber-600 flex-shrink-0" />
+                <AlertCircle className="h-6 w-6 text-amber-600 shrink-0" />
                 <div>
                   <h3 className="font-semibold mb-2">Important Delivery Information</h3>
                   <ul className="space-y-2 text-sm text-muted-foreground">

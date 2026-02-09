@@ -4,58 +4,249 @@
 
 /* Animation keyframes for shadcn components */
 @keyframes accordion-down {
-  from { height: 0; }
-  to { height: var(--radix-accordion-content-height); }
+  from {
+    height: 0;
+  }
+  to {
+    height: var(--radix-accordion-content-height);
+  }
 }
 
 @keyframes accordion-up {
-  from { height: var(--radix-accordion-content-height); }
-  to { height: 0; }
+  from {
+    height: var(--radix-accordion-content-height);
+  }
+  to {
+    height: 0;
+  }
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes fadeOut {
-  from { opacity: 1; }
-  to { opacity: 0; }
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
 }
 
 @keyframes slideInFromRight {
-  from { transform: translateX(100%); }
-  to { transform: translateX(0); }
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
 }
 
 @keyframes slideOutToRight {
-  from { transform: translateX(0); }
-  to { transform: translateX(100%); }
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(100%);
+  }
 }
 
 @keyframes slideInFromLeft {
-  from { transform: translateX(-100%); }
-  to { transform: translateX(0); }
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
 }
 
 @keyframes slideOutToLeft {
-  from { transform: translateX(0); }
-  to { transform: translateX(-100%); }
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-100%);
+  }
 }
 
 @keyframes slideInFromTop {
-  from { transform: translateY(-100%); }
-  to { transform: translateY(0); }
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(0);
+  }
 }
 
 @keyframes slideInFromBottom {
-  from { transform: translateY(100%); }
-  to { transform: translateY(0); }
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Animation enter/exit utilities for sheet and dialog components */
+.animate-in {
+  animation-name: enter;
+  animation-duration: 300ms;
+  animation-timing-function: ease-out;
+  animation-fill-mode: both;
+}
+
+.animate-out {
+  animation-name: exit;
+  animation-duration: 200ms;
+  animation-timing-function: ease-in;
+  animation-fill-mode: both;
+}
+
+@keyframes enter {
+  from {
+    opacity: var(--tw-enter-opacity, 1);
+    transform: translate3d(
+        var(--tw-enter-translate-x, 0),
+        var(--tw-enter-translate-y, 0),
+        0
+      )
+      scale3d(
+        var(--tw-enter-scale, 1),
+        var(--tw-enter-scale, 1),
+        var(--tw-enter-scale, 1)
+      )
+      rotate(var(--tw-enter-rotate, 0));
+  }
+}
+
+@keyframes exit {
+  to {
+    opacity: var(--tw-exit-opacity, 1);
+    transform: translate3d(
+        var(--tw-exit-translate-x, 0),
+        var(--tw-exit-translate-y, 0),
+        0
+      )
+      scale3d(
+        var(--tw-exit-scale, 1),
+        var(--tw-exit-scale, 1),
+        var(--tw-exit-scale, 1)
+      )
+      rotate(var(--tw-exit-rotate, 0));
+  }
+}
+
+/* Fade animations */
+.fade-in-0 {
+  --tw-enter-opacity: 0;
+}
+.fade-out-0 {
+  --tw-exit-opacity: 0;
+}
+
+/* Slide animations - base classes */
+.slide-in-from-right {
+  --tw-enter-translate-x: 100%;
+}
+.slide-out-to-right {
+  --tw-exit-translate-x: 100%;
+}
+.slide-in-from-left {
+  --tw-enter-translate-x: -100%;
+}
+.slide-out-to-left {
+  --tw-exit-translate-x: -100%;
+}
+.slide-in-from-top {
+  --tw-enter-translate-y: -100%;
+}
+.slide-out-to-top {
+  --tw-exit-translate-y: -100%;
+}
+.slide-in-from-bottom {
+  --tw-enter-translate-y: 100%;
+}
+.slide-out-to-bottom {
+  --tw-exit-translate-y: 100%;
+}
+
+/* Slide animations - data-state variants for Sheet/Dialog components */
+[data-state="open"].data-\[state\=open\]\:slide-in-from-right {
+  --tw-enter-translate-x: 100%;
+}
+[data-state="closed"].data-\[state\=closed\]\:slide-out-to-right {
+  --tw-exit-translate-x: 100%;
+}
+[data-state="open"].data-\[state\=open\]\:slide-in-from-left {
+  --tw-enter-translate-x: -100%;
+}
+[data-state="closed"].data-\[state\=closed\]\:slide-out-to-left {
+  --tw-exit-translate-x: -100%;
+}
+[data-state="open"].data-\[state\=open\]\:slide-in-from-top {
+  --tw-enter-translate-y: -100%;
+}
+[data-state="closed"].data-\[state\=closed\]\:slide-out-to-top {
+  --tw-exit-translate-y: -100%;
+}
+[data-state="open"].data-\[state\=open\]\:slide-in-from-bottom {
+  --tw-enter-translate-y: 100%;
+}
+[data-state="closed"].data-\[state\=closed\]\:slide-out-to-bottom {
+  --tw-exit-translate-y: 100%;
+}
+
+/* Fade animations - data-state variants */
+[data-state="open"].data-\[state\=open\]\:fade-in-0 {
+  --tw-enter-opacity: 0;
+}
+[data-state="closed"].data-\[state\=closed\]\:fade-out-0 {
+  --tw-exit-opacity: 0;
+}
+
+/* Animate in/out - data-state variants */
+[data-state="open"].data-\[state\=open\]\:animate-in {
+  animation-name: enter;
+  animation-duration: 300ms;
+  animation-timing-function: ease-out;
+  animation-fill-mode: both;
+}
+[data-state="closed"].data-\[state\=closed\]\:animate-out {
+  animation-name: exit;
+  animation-duration: 200ms;
+  animation-timing-function: ease-in;
+  animation-fill-mode: both;
+}
+
+/* Duration overrides - data-state variants */
+[data-state="open"].data-\[state\=open\]\:duration-500 {
+  animation-duration: 500ms;
+}
+[data-state="closed"].data-\[state\=closed\]\:duration-300 {
+  animation-duration: 300ms;
+}
+
+/* Zoom animations */
+.zoom-in-95 {
+  --tw-enter-scale: 0.95;
+}
+.zoom-out-95 {
+  --tw-exit-scale: 0.95;
 }
 
 @theme inline {
@@ -189,12 +380,73 @@
   * {
     @apply border-border outline-ring/50;
   }
+  html,
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground overflow-hidden h-dvh;
   }
 }
 
 /* Serif font for all headings - outside @layer for proper specificity */
-h1, h2, h3, h4, h5, h6 {
-  font-family: "capitolina", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: "capitolina", ui-serif, Georgia, Cambria, "Times New Roman",
+    Times, serif;
+}
+
+/* Prose typography improvements */
+.prose h1 {
+  font-family: "capitolina", ui-serif, Georgia, Cambria, "Times New Roman",
+    Times, serif;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+.prose h2 {
+  font-family: "capitolina", ui-serif, Georgia, Cambria, "Times New Roman",
+    Times, serif;
+  font-weight: 600;
+  margin-top: 2.5rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid oklch(0.922 0 0);
+}
+
+.prose h3,
+.prose h4,
+.prose h5,
+.prose h6 {
+  font-family: "capitolina", ui-serif, Georgia, Cambria, "Times New Roman",
+    Times, serif;
+  font-weight: 600;
+}
+
+.prose .lead {
+  font-size: 1.25rem;
+  line-height: 1.6;
+  color: oklch(0.4 0 0);
+  margin-bottom: 1.5rem;
+}
+
+.prose ul,
+.prose ol {
+  margin-top: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.prose li {
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.prose p {
+  margin-bottom: 1.25rem;
+}
+
+.prose address {
+  margin-top: 1rem;
+  line-height: 1.8;
 }

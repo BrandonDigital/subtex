@@ -18,17 +18,19 @@ export const notificationTypeEnum = pgEnum("notification_type", [
   "promotion",
   "system",
   "low_stock_admin", // Admin-only notification for low stock
+  "stock_reserved", // Notification when someone reserves a product in user's cart
 ]);
 
 export const notifications = pgTable("notifications", {
   id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id")
+  userId: varchar("user_id", { length: 255 })
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   type: notificationTypeEnum("type").notNull(),
   title: varchar("title", { length: 255 }).notNull(),
   message: text("message").notNull(),
   link: varchar("link", { length: 500 }), // Optional link to relevant page
+  imageUrl: varchar("image_url", { length: 500 }), // Optional image (e.g., product thumbnail)
   read: boolean("read").default(false).notNull(),
   emailSent: boolean("email_sent").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -36,27 +38,29 @@ export const notifications = pgTable("notifications", {
 
 export const notificationPreferences = pgTable("notification_preferences", {
   id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id")
+  userId: varchar("user_id", { length: 255 })
     .notNull()
     .references(() => users.id, { onDelete: "cascade" })
     .unique(),
-  
+
   // Email preferences
   emailOrderUpdates: boolean("email_order_updates").default(true).notNull(),
   emailStockAlerts: boolean("email_stock_alerts").default(true).notNull(),
   emailQuoteReady: boolean("email_quote_ready").default(true).notNull(),
   emailPromotions: boolean("email_promotions").default(false).notNull(),
-  
+
   // In-app preferences
   pushOrderUpdates: boolean("push_order_updates").default(true).notNull(),
   pushStockAlerts: boolean("push_stock_alerts").default(true).notNull(),
   pushQuoteReady: boolean("push_quote_ready").default(true).notNull(),
   pushPromotions: boolean("push_promotions").default(false).notNull(),
-  
+
   // Marketing
-  marketingUnsubscribed: boolean("marketing_unsubscribed").default(false).notNull(),
+  marketingUnsubscribed: boolean("marketing_unsubscribed")
+    .default(false)
+    .notNull(),
   unsubscribedAt: timestamp("unsubscribed_at"),
-  
+
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -82,5 +86,7 @@ export const notificationPreferencesRelations = relations(
 // Types
 export type Notification = typeof notifications.$inferSelect;
 export type NewNotification = typeof notifications.$inferInsert;
-export type NotificationPreferences = typeof notificationPreferences.$inferSelect;
-export type NewNotificationPreferences = typeof notificationPreferences.$inferInsert;
+export type NotificationPreferences =
+  typeof notificationPreferences.$inferSelect;
+export type NewNotificationPreferences =
+  typeof notificationPreferences.$inferInsert;
