@@ -13,6 +13,7 @@ import {
   getUserNotifications,
 } from "@/server/actions/notifications";
 import "./globals.css";
+import { Analytics } from "@vercel/analytics/next"
 
 // Check if coming soon mode is enabled
 const isComingSoonMode = process.env.COMING_SOON_MODE === "true";
@@ -260,6 +261,7 @@ export default async function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}
       >
+        <Analytics/>
         <Providers>
           <ToastProvider>
             <ToastBridge />
