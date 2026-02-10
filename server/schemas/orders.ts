@@ -42,11 +42,14 @@ export const deliveryMethodEnum = pgEnum("delivery_method", [
 export const orders = pgTable("orders", {
   id: uuid("id").primaryKey().defaultRandom(),
   orderNumber: varchar("order_number", { length: 50 }).notNull().unique(),
-  userId: varchar("user_id", { length: 255 })
-    .notNull()
-    .references(() => users.id),
+  userId: varchar("user_id", { length: 255 }).references(() => users.id),
   status: orderStatusEnum("status").default("pending").notNull(),
   deliveryMethod: deliveryMethodEnum("delivery_method").notNull(),
+
+  // Guest checkout info (when userId is null)
+  guestName: varchar("guest_name", { length: 255 }),
+  guestEmail: varchar("guest_email", { length: 255 }),
+  guestPhone: varchar("guest_phone", { length: 50 }),
 
   // Pricing (all in cents, GST-inclusive)
   subtotalInCents: integer("subtotal_in_cents").notNull(),
@@ -86,6 +89,9 @@ export const orders = pgTable("orders", {
   // Delivery address (snapshot at order time)
   deliveryAddressId: uuid("delivery_address_id").references(() => addresses.id),
   deliveryAddressSnapshot: text("delivery_address_snapshot"), // JSON snapshot
+
+  // Email tracking
+  confirmationEmailSentAt: timestamp("confirmation_email_sent_at"),
 
   // Notes
   customerNotes: text("customer_notes"),

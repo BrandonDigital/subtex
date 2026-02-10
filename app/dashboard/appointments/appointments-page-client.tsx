@@ -71,7 +71,11 @@ interface Appointment {
   receiverSignature: string | null;
   signedAt: Date | null;
   createdAt: Date;
-  user: AppointmentUser;
+  user: AppointmentUser | null;
+  // Guest checkout fields
+  guestName: string | null;
+  guestEmail: string | null;
+  guestPhone: string | null;
   items: OrderItem[];
 }
 
@@ -691,35 +695,37 @@ function AppointmentCard({
             <div className='flex items-center gap-2 text-sm'>
               <User className='h-3.5 w-3.5 text-muted-foreground shrink-0' />
               <span className='font-medium'>
-                {order.user.name || "Unknown"}
+                {order.user?.name || order.guestName || "Guest"}
               </span>
-              {order.user.company && (
+              {order.user?.company && (
                 <span className='text-muted-foreground flex items-center gap-1'>
                   <Building2 className='h-3 w-3' />
                   {order.user.company}
                 </span>
               )}
             </div>
-            {order.user.phone && (
+            {(order.user?.phone || order.guestPhone) && (
               <div className='flex items-center gap-2 text-sm text-muted-foreground'>
                 <Phone className='h-3.5 w-3.5 shrink-0' />
                 <a
-                  href={`tel:${order.user.phone}`}
+                  href={`tel:${order.user?.phone || order.guestPhone}`}
                   className='hover:underline'
                 >
-                  {order.user.phone}
+                  {order.user?.phone || order.guestPhone}
                 </a>
               </div>
             )}
-            <div className='flex items-center gap-2 text-sm text-muted-foreground'>
-              <Mail className='h-3.5 w-3.5 shrink-0' />
-              <a
-                href={`mailto:${order.user.email}`}
-                className='hover:underline truncate'
-              >
-                {order.user.email}
-              </a>
-            </div>
+            {(order.user?.email || order.guestEmail) && (
+              <div className='flex items-center gap-2 text-sm text-muted-foreground'>
+                <Mail className='h-3.5 w-3.5 shrink-0' />
+                <a
+                  href={`mailto:${order.user?.email || order.guestEmail}`}
+                  className='hover:underline truncate'
+                >
+                  {order.user?.email || order.guestEmail}
+                </a>
+              </div>
+            )}
           </div>
         </div>
 

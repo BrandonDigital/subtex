@@ -18,6 +18,9 @@ import { Analytics } from "@vercel/analytics/next"
 // Check if coming soon mode is enabled
 const isComingSoonMode = process.env.COMING_SOON_MODE === "true";
 
+// Check if this is the dev site
+const isDevSite = siteConfig.url.includes("dev.subtex.com.au");
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -87,17 +90,19 @@ export const metadata: Metadata = {
     description: siteConfig.description,
     images: ["/og-image.jpg"],
   },
-  robots: {
-    index: true,
-    follow: true,
-    googleBot: {
-      index: true,
-      follow: true,
-      "max-video-preview": -1,
-      "max-image-preview": "large",
-      "max-snippet": -1,
-    },
-  },
+  robots: isDevSite
+    ? { index: false, follow: false }
+    : {
+        index: true,
+        follow: true,
+        googleBot: {
+          index: true,
+          follow: true,
+          "max-video-preview": -1,
+          "max-image-preview": "large",
+          "max-snippet": -1,
+        },
+      },
   category: "Business",
   classification: "Building Materials, Signage Supplies",
   other: {

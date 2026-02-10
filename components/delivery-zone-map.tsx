@@ -39,35 +39,75 @@ const ZONE_COLORS = [
   { fill: "#8b5cf6", stroke: "#7c3aed" }, // Purple for future zones
 ];
 
-// Load Google Maps script dynamically
-function loadGoogleMapsScript(apiKey: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    // Check if already loaded
-    if (window.google?.maps) {
-      resolve();
-      return;
-    }
+// Google Maps library references (loaded via importLibrary)
+interface MapsLibraries {
+  Map: typeof google.maps.Map;
+  Circle: typeof google.maps.Circle;
+  Marker: typeof google.maps.Marker;
+  Geocoder: typeof google.maps.Geocoder;
+  LatLngBounds: typeof google.maps.LatLngBounds;
+  ControlPosition: typeof google.maps.ControlPosition;
+  SymbolPath: typeof google.maps.SymbolPath;
+}
 
-    // Check if script is already being loaded
-    const existingScript = document.querySelector(
-      'script[src*="maps.googleapis.com"]'
-    );
-    if (existingScript) {
-      existingScript.addEventListener("load", () => resolve());
-      existingScript.addEventListener("error", () =>
-        reject(new Error("Failed to load Google Maps"))
+// Load Google Maps libraries using the modern importLibrary approach
+async function loadGoogleMapsLibraries(
+  apiKey: string
+): Promise<MapsLibraries> {
+  // Load the bootstrap script if not already present
+  if (!(typeof window.google?.maps?.importLibrary === "function")) {
+    await new Promise<void>((resolve, reject) => {
+      const existingScript = document.querySelector(
+        'script[src*="maps.googleapis.com"]'
       );
-      return;
-    }
+      if (existingScript) {
+        const checkLoaded = () => {
+          if (typeof window.google?.maps?.importLibrary === "function") {
+            resolve();
+          } else {
+            setTimeout(checkLoaded, 100);
+          }
+        };
+        checkLoaded();
+        return;
+      }
 
-    const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Failed to load Google Maps"));
-    document.head.appendChild(script);
-  });
+      const script = document.createElement("script");
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&loading=async`;
+      script.async = true;
+      script.defer = true;
+      script.onload = () => {
+        const checkLoaded = () => {
+          if (typeof window.google?.maps?.importLibrary === "function") {
+            resolve();
+          } else {
+            setTimeout(checkLoaded, 100);
+          }
+        };
+        checkLoaded();
+      };
+      script.onerror = () => reject(new Error("Failed to load Google Maps"));
+      document.head.appendChild(script);
+    });
+  }
+
+  // Import the required libraries in parallel
+  const [mapsLib, markerLib, geocodingLib, coreLib] = await Promise.all([
+    google.maps.importLibrary("maps"),
+    google.maps.importLibrary("marker"),
+    google.maps.importLibrary("geocoding"),
+    google.maps.importLibrary("core"),
+  ]);
+
+  return {
+    Map: (mapsLib as google.maps.MapsLibrary).Map,
+    Circle: (mapsLib as google.maps.MapsLibrary).Circle,
+    Marker: (markerLib as google.maps.MarkerLibrary).Marker,
+    Geocoder: (geocodingLib as google.maps.GeocodingLibrary).Geocoder,
+    LatLngBounds: (coreLib as google.maps.CoreLibrary).LatLngBounds,
+    ControlPosition: (coreLib as google.maps.CoreLibrary).ControlPosition,
+    SymbolPath: (coreLib as google.maps.CoreLibrary).SymbolPath,
+  };
 }
 
 interface CircleData {
@@ -107,6 +147,7 @@ export function DeliveryZoneMap({
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
   const circlesRef = useRef<CircleData[]>([]);
   const deliveryMarkerRef = useRef<google.maps.Marker | null>(null);
+  const mapsLibRef = useRef<MapsLibraries | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const initializedRef = useRef(false);
@@ -123,11 +164,13 @@ export function DeliveryZoneMap({
 
     initializedRef.current = true;
 
-    loadGoogleMapsScript(apiKey)
-      .then(() => {
+    loadGoogleMapsLibraries(apiKey)
+      .then((libs) => {
         if (!mapRef.current) return;
 
-        const map = new google.maps.Map(mapRef.current, {
+        mapsLibRef.current = libs;
+
+        const map = new libs.Map(mapRef.current, {
           center: WAREHOUSE_LOCATION,
           zoom: 10,
           mapTypeControl: false,
@@ -135,7 +178,7 @@ export function DeliveryZoneMap({
           fullscreenControl: false,
           zoomControl: true,
           zoomControlOptions: {
-            position: google.maps.ControlPosition.RIGHT_CENTER,
+            position: libs.ControlPosition.RIGHT_CENTER,
           },
           styles: [
             {
@@ -149,12 +192,12 @@ export function DeliveryZoneMap({
         mapInstanceRef.current = map;
 
         // Add warehouse marker
-        new google.maps.Marker({
+        new libs.Marker({
           position: WAREHOUSE_LOCATION,
           map,
           title: "Subtex Warehouse - 16 Brewer Rd, Canning Vale",
           icon: {
-            path: google.maps.SymbolPath.CIRCLE,
+            path: libs.SymbolPath.CIRCLE,
             scale: 8,
             fillColor: "#000000",
             fillOpacity: 1,
@@ -174,7 +217,7 @@ export function DeliveryZoneMap({
           const colors = ZONE_COLORS[colorIndex] || ZONE_COLORS[0];
           const isSelected = zone.id === selectedZone;
 
-          const circle = new google.maps.Circle({
+          const circle = new libs.Circle({
             strokeColor: colors.stroke,
             strokeOpacity: isSelected ? 1 : 0.8,
             strokeWeight: isSelected ? 3 : 2,
@@ -232,7 +275,8 @@ export function DeliveryZoneMap({
 
   // Update delivery address marker when address changes
   useEffect(() => {
-    if (!isLoaded || !mapInstanceRef.current || !window.google) return;
+    const libs = mapsLibRef.current;
+    if (!isLoaded || !mapInstanceRef.current || !libs) return;
 
     // Remove existing delivery marker
     if (deliveryMarkerRef.current) {
@@ -251,7 +295,7 @@ export function DeliveryZoneMap({
     }
 
     // Geocode the address
-    const geocoder = new google.maps.Geocoder();
+    const geocoder = new libs.Geocoder();
     const fullAddress = `${deliveryAddress.address}, ${deliveryAddress.city}, ${deliveryAddress.state} ${deliveryAddress.postalCode}, Australia`;
 
     geocoder.geocode({ address: fullAddress }, (results, status) => {
@@ -285,12 +329,12 @@ export function DeliveryZoneMap({
         }
 
         // Create delivery marker (red dot)
-        deliveryMarkerRef.current = new google.maps.Marker({
+        deliveryMarkerRef.current = new libs.Marker({
           position: location,
           map: mapInstanceRef.current,
           title: "Delivery Address",
           icon: {
-            path: google.maps.SymbolPath.CIRCLE,
+            path: libs.SymbolPath.CIRCLE,
             scale: 8,
             fillColor: "#ef4444",
             fillOpacity: 1,
@@ -300,7 +344,7 @@ export function DeliveryZoneMap({
         });
 
         // Fit bounds to include both warehouse and delivery location
-        const bounds = new google.maps.LatLngBounds();
+        const bounds = new libs.LatLngBounds();
         bounds.extend(WAREHOUSE_LOCATION);
         bounds.extend(location);
         mapInstanceRef.current.fitBounds(bounds, {

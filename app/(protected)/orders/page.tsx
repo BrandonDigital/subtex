@@ -5,8 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { getUserOrders } from "@/server/actions/orders";
+import {
+  getUserOrders,
+  getOrderByNumber,
+  trySendOrderConfirmationEmail,
+} from "@/server/actions/orders";
 import { RefundRequestButton } from "./refund-request-button";
+import { ClearCartOnSuccess } from "@/components/clear-cart-on-success";
 
 export const metadata: Metadata = {
   title: "My Orders",
@@ -41,8 +46,23 @@ function formatDate(date: Date): string {
   }).format(new Date(date));
 }
 
-export default async function OrdersPage() {
+interface OrdersPageProps {
+  searchParams: Promise<{ success?: string; order?: string }>;
+}
+
+export default async function OrdersPage({ searchParams }: OrdersPageProps) {
+  const { success, order: orderNumber } = await searchParams;
   const orders = await getUserOrders();
+
+  // If redirected from checkout, try to send confirmation email
+  if (success === "true" && orderNumber) {
+    const order = await getOrderByNumber(orderNumber);
+    if (order?.id) {
+      trySendOrderConfirmationEmail(order.id).catch((err) => {
+        console.error("Failed to send order confirmation email from orders page:", err);
+      });
+    }
+  }
 
   if (orders.length === 0) {
     return (
@@ -67,6 +87,7 @@ export default async function OrdersPage() {
 
   return (
     <div className="py-12">
+      {success === "true" && <ClearCartOnSuccess />}
       <div className="container mx-auto px-4">
         <div className="max-w-4xl mx-auto">
           <h1 className="text-3xl font-bold mb-8">My Orders</h1>
