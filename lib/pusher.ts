@@ -11,12 +11,14 @@ export const pusher = new Pusher({
 
 // Channel names
 export const INVENTORY_CHANNEL_PREFIX = "inventory-";
+export const PURCHASES_CHANNEL = "purchases";
 
 // Event types
 export const PUSHER_EVENTS = {
   STOCK_RESERVED: "stock-reserved",
   STOCK_RELEASED: "stock-released",
   STOCK_UPDATED: "stock-updated",
+  PRODUCT_PURCHASED: "product-purchased",
 } as const;
 
 // Helper to get inventory channel name for a product
@@ -45,4 +47,10 @@ export interface StockUpdatedEvent {
   productId: string;
   productName: string;
   availableStock: number;
+}
+
+export interface ProductPurchasedEvent {
+  buyerName: string; // e.g. "Brandon D."
+  productName: string;
+  productImage?: string;
 }

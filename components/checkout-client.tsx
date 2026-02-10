@@ -1,9 +1,21 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  useMemo,
+} from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { Elements } from "@stripe/react-stripe-js";
+import { getStripe } from "@/lib/stripe-client";
+import {
+  StripePaymentForm,
+  type StripePaymentFormHandle,
+} from "@/components/stripe-payment-form";
 import {
   MapPin,
   Truck,
@@ -38,8 +50,9 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useCart } from "@/hooks/use-cart";
 import {
-  createCheckoutSession,
-  createDevOrder,
+  createPaymentIntent,
+  updatePaymentIntent,
+  createPendingOrder,
 } from "@/server/actions/checkout";
 import { validateDiscountCode } from "@/server/actions/discount-codes";
 import {
@@ -234,6 +247,13 @@ export function CheckoutClient({
   const [isLoading, setIsLoading] = useState(false);
   const [notes, setNotes] = useState("");
 
+  // Stripe Payment state
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [paymentIntentId, setPaymentIntentId] = useState<string>("");
+  const [isCreatingPaymentIntent, setIsCreatingPaymentIntent] = useState(true);
+  const paymentFormRef = useRef<StripePaymentFormHandle>(null);
+  const hasCreatedPaymentIntent = useRef(false);
+
   // Reservation state
   const [reservationIds, setReservationIds] = useState<string[]>([]);
   const [reservationExpiresAt, setReservationExpiresAt] = useState<Date | null>(
@@ -365,6 +385,31 @@ export function CheckoutClient({
     setReservationExpiresAt(null);
     router.push("/?expired=true");
   }, [router]);
+
+  // Create Stripe PaymentIntent on mount
+  useEffect(() => {
+    async function initPaymentIntent() {
+      if (hasCreatedPaymentIntent.current || subtotalInCents <= 0) {
+        setIsCreatingPaymentIntent(false);
+        return;
+      }
+
+      hasCreatedPaymentIntent.current = true;
+
+      try {
+        const result = await createPaymentIntent(subtotalInCents);
+        setClientSecret(result.clientSecret);
+        setPaymentIntentId(result.paymentIntentId);
+      } catch (error) {
+        console.error("Failed to create payment intent:", error);
+        toast.error("Failed to initialize payment. Please refresh the page.");
+      } finally {
+        setIsCreatingPaymentIntent(false);
+      }
+    }
+
+    initPaymentIntent();
+  }, [subtotalInCents]);
 
   // Autofill user info when signed in
   useEffect(() => {
@@ -500,6 +545,23 @@ export function CheckoutClient({
       ? discountedSubtotal
       : discountedSubtotal + deliveryFee;
 
+  // Update PaymentIntent amount when totals change (debounced)
+  const amountUpdateTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => {
+    if (!paymentIntentId || amountDueNow <= 0) return;
+
+    clearTimeout(amountUpdateTimer.current);
+    amountUpdateTimer.current = setTimeout(async () => {
+      try {
+        await updatePaymentIntent(paymentIntentId, amountDueNow);
+      } catch (error) {
+        console.error("Failed to update payment intent amount:", error);
+      }
+    }, 500);
+
+    return () => clearTimeout(amountUpdateTimer.current);
+  }, [paymentIntentId, amountDueNow]);
+
   // Handle applying discount code
   const handleApplyDiscount = async () => {
     if (!discountCode.trim()) {
@@ -561,6 +623,11 @@ export function CheckoutClient({
   const handleSubmit = async () => {
     if (items.length === 0) {
       toast.error("Your cart is empty");
+      return;
+    }
+
+    if (!paymentFormRef.current || !paymentIntentId) {
+      toast.error("Payment system is still loading. Please wait.");
       return;
     }
 
@@ -671,8 +738,11 @@ export function CheckoutClient({
         quantity: item.quantity,
       }));
 
-      // Use dev checkout (bypasses Stripe) — switch to createCheckoutSession once Stripe is configured
-      const result = await createDevOrder({
+      // Ensure PaymentIntent has the final amount
+      await updatePaymentIntent(paymentIntentId, amountDueNow);
+
+      // Create the order with "pending" status before confirming payment
+      const orderResult = await createPendingOrder({
         items: checkoutItems,
         deliveryMethod:
           deliveryMethod === "click_collect" ? "pickup" : "delivery",
@@ -680,13 +750,6 @@ export function CheckoutClient({
           deliveryMethod === "local_delivery" ? deliveryFee : 0,
         discountCodeId: appliedDiscount?.codeId,
         discountInCents: totalDiscountAmount,
-        ...(isGuest && {
-          guestInfo: {
-            firstName: shippingAddress.firstName.trim(),
-            email: email.trim() || undefined,
-            phone: contactPhone.trim() || undefined,
-          },
-        }),
         ...(deliveryMethod === "click_collect" &&
           !hasBackorderItems &&
           selectedCollectionDate &&
@@ -713,19 +776,73 @@ export function CheckoutClient({
                 phone: shippingAddress.phone || undefined,
               }
             : undefined,
+        paymentIntentId,
+        // Include guest info for unauthenticated users
+        ...(isGuest && {
+          guestInfo: {
+            firstName: shippingAddress.firstName,
+            email: email.trim() || undefined,
+            phone: contactPhone.trim() || undefined,
+          },
+        }),
       });
 
-      if (result.success && result.redirectUrl) {
-        // Clear cart and redirect to orders page
+      if (!orderResult.success) {
+        throw new Error("Failed to create order");
+      }
+
+      // Build formatted items string for Stripe metadata (e.g. "1 x ACM001, 4 x ACM002")
+      const itemsSummary = checkoutItems
+        .map((item) => `${item.quantity} x ${item.partNumber}`)
+        .join(", ");
+
+      // Determine customer name for Stripe
+      const customerName = [shippingAddress.firstName, shippingAddress.lastName]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+
+      const customerEmail = email.trim() || undefined;
+      const customerPhone = contactPhone.trim() || undefined;
+
+      // Update PaymentIntent metadata with order ID, customer info, and items
+      await updatePaymentIntent(
+        paymentIntentId,
+        amountDueNow,
+        {
+          orderId: orderResult.orderId,
+          orderNumber: orderResult.orderNumber,
+          customerName: customerName || "",
+          customerEmail: customerEmail || "",
+          customerPhone: customerPhone || "",
+          items: itemsSummary,
+        },
+        {
+          receiptEmail: customerEmail,
+          description: `Order ${orderResult.orderNumber}: ${itemsSummary}`,
+        }
+      );
+
+      // Confirm payment — this redirects to the return URL on success
+      const appUrl =
+        process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3004";
+      const returnUrl = isGuest
+        ? `${appUrl}/order-confirmation?order=${orderResult.orderNumber}`
+        : `${appUrl}/orders?success=true&order=${orderResult.orderNumber}`;
+
+      const { error } = await paymentFormRef.current.confirmPayment(returnUrl);
+
+      if (error) {
+        // Payment failed (e.g. card declined) — the pending order stays
+        // The user can fix the issue and try again
+        toast.error(error.message || "Payment failed. Please try again.");
+      } else {
+        // If we reach here, the payment succeeded without redirect
         clearCart();
-        toast.success(
-          `Order ${result.orderNumber} placed successfully!`
-        );
-        window.location.href = result.redirectUrl;
       }
     } catch (error) {
       console.error("Checkout error:", error);
-      toast.error("Failed to create checkout session. Please try again.");
+      toast.error("Something went wrong. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -1673,86 +1790,61 @@ export function CheckoutClient({
               </CardTitle>
             </CardHeader>
             <CardContent className='space-y-4'>
-              <p className='text-sm text-muted-foreground'>
-                You will be redirected to our secure payment provider (Stripe)
-                to complete your purchase.
+              {isCreatingPaymentIntent ? (
+                <div className='flex items-center justify-center py-8'>
+                  <Loader2 className='h-6 w-6 animate-spin text-muted-foreground' />
+                  <span className='ml-2 text-sm text-muted-foreground'>
+                    Loading payment form...
+                  </span>
+                </div>
+              ) : clientSecret ? (
+                <Elements
+                  stripe={getStripe()}
+                  options={{
+                    clientSecret,
+                    appearance: {
+                      theme: "stripe",
+                      variables: {
+                        colorPrimary: "#0f172a",
+                        colorBackground: "#ffffff",
+                        colorText: "#1e293b",
+                        colorDanger: "#ef4444",
+                        fontFamily:
+                          'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                        borderRadius: "8px",
+                        spacingUnit: "4px",
+                      },
+                      rules: {
+                        ".Input": {
+                          border: "1px solid #e2e8f0",
+                          boxShadow: "none",
+                          padding: "10px 12px",
+                        },
+                        ".Input:focus": {
+                          border: "1px solid #0f172a",
+                          boxShadow: "0 0 0 1px #0f172a",
+                        },
+                        ".Label": {
+                          fontWeight: "500",
+                          fontSize: "14px",
+                        },
+                      },
+                    },
+                  }}
+                >
+                  <StripePaymentForm ref={paymentFormRef} />
+                </Elements>
+              ) : (
+                <div className='text-center py-4'>
+                  <p className='text-sm text-destructive'>
+                    Failed to load payment form. Please refresh the page.
+                  </p>
+                </div>
+              )}
+              <p className='text-xs text-muted-foreground'>
+                Your payment is processed securely by Stripe. We never store
+                your card details.
               </p>
-              <div className='flex flex-wrap gap-3'>
-                <div className='flex items-center gap-2 px-3 py-2 border rounded-md'>
-                  <svg
-                    className='h-6 w-8'
-                    viewBox='0 0 38 24'
-                    fill='none'
-                    xmlns='http://www.w3.org/2000/svg'
-                  >
-                    <rect width='38' height='24' rx='4' fill='#1434CB' />
-                    <path
-                      d='M15.5 16.5H13L14.75 7.5H17.25L15.5 16.5Z'
-                      fill='white'
-                    />
-                    <path
-                      d='M23.75 7.75C23.25 7.5 22.5 7.25 21.5 7.25C19 7.25 17.25 8.5 17.25 10.25C17.25 11.5 18.5 12.25 19.5 12.75C20.5 13.25 20.75 13.5 20.75 14C20.75 14.75 19.75 15 19 15C18 15 17.5 14.75 16.75 14.5L16.5 14.25L16.25 16C17 16.25 18.25 16.5 19.5 16.5C22.25 16.5 24 15.25 24 13.25C24 12.25 23.25 11.5 22 10.75C21 10.25 20.5 10 20.5 9.5C20.5 9 21 8.5 22 8.5C22.75 8.5 23.25 8.75 23.75 8.75L24 9L24.25 7.5L23.75 7.75Z'
-                      fill='white'
-                    />
-                    <path
-                      d='M27.75 7.5H25.75C25.25 7.5 24.75 7.75 24.5 8.25L21 16.5H23.75L24.25 15H27.5L27.75 16.5H30.25L27.75 7.5ZM25 13.25L26.25 9.75L27 13.25H25Z'
-                      fill='white'
-                    />
-                    <path
-                      d='M12.5 7.5L10 13.75L9.75 12.5C9.25 11 8 9.5 6.5 8.75L8.75 16.5H11.5L15.25 7.5H12.5Z'
-                      fill='white'
-                    />
-                    <path
-                      d='M8.25 7.5H4L4 7.75C7.5 8.5 9.75 10.5 10.5 13L9.5 8.25C9.25 7.75 8.75 7.5 8.25 7.5Z'
-                      fill='#F9A533'
-                    />
-                  </svg>
-                  <span className='text-xs'>Visa</span>
-                </div>
-                <div className='flex items-center gap-2 px-3 py-2 border rounded-md'>
-                  <svg
-                    className='h-6 w-8'
-                    viewBox='0 0 38 24'
-                    fill='none'
-                    xmlns='http://www.w3.org/2000/svg'
-                  >
-                    <rect width='38' height='24' rx='4' fill='#252525' />
-                    <circle cx='15' cy='12' r='7' fill='#EB001B' />
-                    <circle cx='23' cy='12' r='7' fill='#F79E1B' />
-                    <path
-                      d='M19 7C20.86 8.32 22 10.51 22 13C22 15.49 20.86 17.68 19 19C17.14 17.68 16 15.49 16 13C16 10.51 17.14 8.32 19 7Z'
-                      fill='#FF5F00'
-                    />
-                  </svg>
-                  <span className='text-xs'>Mastercard</span>
-                </div>
-                <div className='flex items-center gap-2 px-3 py-2 border rounded-md'>
-                  <svg
-                    className='h-6 w-8'
-                    viewBox='0 0 38 24'
-                    fill='none'
-                    xmlns='http://www.w3.org/2000/svg'
-                  >
-                    <rect width='38' height='24' rx='4' fill='#006FCF' />
-                    <path
-                      d='M19 4L4 12L19 20L34 12L19 4Z'
-                      fill='white'
-                      fillOpacity='0.3'
-                    />
-                    <text
-                      x='19'
-                      y='14'
-                      textAnchor='middle'
-                      fill='white'
-                      fontSize='6'
-                      fontWeight='bold'
-                    >
-                      AMEX
-                    </text>
-                  </svg>
-                  <span className='text-xs'>Amex</span>
-                </div>
-              </div>
             </CardContent>
           </Card>
 
@@ -1995,6 +2087,8 @@ export function CheckoutClient({
                 onClick={handleSubmit}
                 disabled={
                   isLoading ||
+                  !clientSecret ||
+                  isCreatingPaymentIntent ||
                   (deliveryMethod === "local_delivery" &&
                     isOutOfDeliveryRange) ||
                   (deliveryMethod === "click_collect" &&
@@ -2005,7 +2099,7 @@ export function CheckoutClient({
                 {isLoading ? (
                   <>
                     <Loader2 className='mr-2 h-4 w-4 animate-spin' />
-                    Processing...
+                    Processing payment...
                   </>
                 ) : deliveryMethod === "local_delivery" &&
                   isOutOfDeliveryRange ? (

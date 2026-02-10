@@ -16,11 +16,13 @@ export function getPusherClient(): PusherClient {
 
 // Re-export channel prefix and events for client use
 export const INVENTORY_CHANNEL_PREFIX = "inventory-";
+export const PURCHASES_CHANNEL = "purchases";
 
 export const PUSHER_EVENTS = {
   STOCK_RESERVED: "stock-reserved",
   STOCK_RELEASED: "stock-released",
   STOCK_UPDATED: "stock-updated",
+  PRODUCT_PURCHASED: "product-purchased",
 } as const;
 
 export function getInventoryChannel(productId: string) {

@@ -46,7 +46,11 @@ interface Order {
   user: {
     name: string | null;
     email: string;
-  };
+  } | null;
+  // Guest checkout fields
+  guestName: string | null;
+  guestEmail: string | null;
+  guestPhone: string | null;
   items: { quantity: number }[];
   refundRequests: { status: string }[];
 }
@@ -98,10 +102,14 @@ export function OrdersTable({ orders }: OrdersTableProps) {
   const [deliveryFilter, setDeliveryFilter] = useState<string>("all");
 
   const filteredOrders = orders.filter((order) => {
+    const searchLower = search.toLowerCase();
     const matchesSearch =
-      order.orderNumber.toLowerCase().includes(search.toLowerCase()) ||
-      order.user?.name?.toLowerCase().includes(search.toLowerCase()) ||
-      order.user?.email.toLowerCase().includes(search.toLowerCase());
+      order.orderNumber.toLowerCase().includes(searchLower) ||
+      order.user?.name?.toLowerCase().includes(searchLower) ||
+      order.user?.email?.toLowerCase().includes(searchLower) ||
+      order.guestName?.toLowerCase().includes(searchLower) ||
+      order.guestEmail?.toLowerCase().includes(searchLower) ||
+      order.guestPhone?.toLowerCase().includes(searchLower);
     
     const matchesStatus = statusFilter === "all" || order.status === statusFilter;
     const matchesDelivery = deliveryFilter === "all" || order.deliveryMethod === deliveryFilter;
@@ -226,8 +234,12 @@ export function OrdersTable({ orders }: OrdersTableProps) {
                       </TableCell>
                       <TableCell>
                         <div>
-                          <p className="font-medium">{order.user?.name || "Guest"}</p>
-                          <p className="text-xs text-muted-foreground">{order.user?.email}</p>
+                          <p className="font-medium">
+                            {order.user?.name || order.guestName || "Guest"}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {order.user?.email || order.guestEmail || order.guestPhone || ""}
+                          </p>
                         </div>
                       </TableCell>
                       <TableCell>

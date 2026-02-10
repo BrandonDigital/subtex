@@ -44,7 +44,9 @@ export async function getUsersWithOrders() {
     .selectDistinct({ userId: orders.userId })
     .from(orders);
 
-  const userIds = ordersWithUsers.map((o) => o.userId);
+  const userIds = ordersWithUsers
+    .map((o) => o.userId)
+    .filter((id): id is string => id !== null);
 
   if (userIds.length === 0) {
     return [];

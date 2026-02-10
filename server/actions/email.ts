@@ -93,25 +93,44 @@ export async function sendWelcomeEmail(email: string, name: string) {
 export async function sendOrderConfirmationEmail(
   email: string,
   name: string,
-  orderId: string,
-  items: { name: string; quantity: number; price: string }[],
+  orderNumber: string,
+  items: { name: string; quantity: number; price: string; imageUrl?: string }[],
   total: string,
+  isGuest: boolean = false,
 ) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3004";
+  const viewOrderUrl = isGuest
+    ? `${appUrl}/order-confirmation?order=${orderNumber}`
+    : `${appUrl}/orders`;
+
   const itemsHtml = items
     .map(
       (item) => `
         <tr>
-          <td style="padding: 12px 0; border-bottom: 1px solid #e4e4e7;">${item.name}</td>
-          <td style="padding: 12px 0; border-bottom: 1px solid #e4e4e7; text-align: center;">${item.quantity}</td>
-          <td style="padding: 12px 0; border-bottom: 1px solid #e4e4e7; text-align: right;">${item.price}</td>
+          <td style="padding: 12px 0; border-bottom: 1px solid #e4e4e7; width: 56px; vertical-align: top;">
+            ${
+              item.imageUrl
+                ? `<img src="${item.imageUrl}" alt="${item.name}" width="48" height="48" style="border-radius: 6px; object-fit: cover; display: block;" />`
+                : `<div style="width: 48px; height: 48px; border-radius: 6px; background-color: #f4f4f5; display: flex; align-items: center; justify-content: center;">
+                    <span style="color: #a1a1aa; font-size: 18px;">&#9634;</span>
+                  </div>`
+            }
+          </td>
+          <td style="padding: 12px 8px; border-bottom: 1px solid #e4e4e7; color: #18181b; vertical-align: top;">${item.name}</td>
+          <td style="padding: 12px 0; border-bottom: 1px solid #e4e4e7; text-align: center; color: #52525b; vertical-align: top;">${item.quantity}</td>
+          <td style="padding: 12px 0; border-bottom: 1px solid #e4e4e7; text-align: right; color: #18181b; vertical-align: top;">${item.price}</td>
         </tr>
       `,
     )
     .join("");
 
+  const itemsText = items
+    .map((item) => `  ${item.name} x${item.quantity} — ${item.price}`)
+    .join("\n");
+
   return sendEmail({
     to: email,
-    subject: `Order Confirmation #${orderId}`,
+    subject: `Order Confirmation ${orderNumber}`,
     html: `
       <!DOCTYPE html>
       <html>
@@ -127,14 +146,15 @@ export async function sendOrderConfirmationEmail(
                 Hi ${name}, thank you for your order. We've received your payment and are processing your order.
               </p>
               <div style="background: #f4f4f5; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
-                <p style="margin: 0; color: #52525b;"><strong>Order ID:</strong> ${orderId}</p>
+                <p style="margin: 0; color: #52525b;"><strong>Order Number:</strong> ${orderNumber}</p>
               </div>
               <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
                 <thead>
                   <tr>
-                    <th style="text-align: left; padding: 12px 0; border-bottom: 2px solid #e4e4e7; color: #52525b;">Item</th>
-                    <th style="text-align: center; padding: 12px 0; border-bottom: 2px solid #e4e4e7; color: #52525b;">Qty</th>
-                    <th style="text-align: right; padding: 12px 0; border-bottom: 2px solid #e4e4e7; color: #52525b;">Price</th>
+                    <th style="width: 56px; padding: 12px 0; border-bottom: 2px solid #e4e4e7;"></th>
+                    <th style="text-align: left; padding: 12px 8px; border-bottom: 2px solid #e4e4e7; color: #52525b; font-size: 14px;">Item</th>
+                    <th style="text-align: center; padding: 12px 0; border-bottom: 2px solid #e4e4e7; color: #52525b; font-size: 14px;">Qty</th>
+                    <th style="text-align: right; padding: 12px 0; border-bottom: 2px solid #e4e4e7; color: #52525b; font-size: 14px;">Price</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -142,12 +162,15 @@ export async function sendOrderConfirmationEmail(
                 </tbody>
                 <tfoot>
                   <tr>
-                    <td colspan="2" style="padding: 16px 0; font-weight: bold;">Total (inc. GST)</td>
-                    <td style="padding: 16px 0; text-align: right; font-weight: bold;">${total}</td>
+                    <td colspan="3" style="padding: 16px 0; font-weight: bold; color: #18181b;">Total (inc. GST)</td>
+                    <td style="padding: 16px 0; text-align: right; font-weight: bold; color: #18181b;">${total}</td>
                   </tr>
                 </tfoot>
               </table>
-              <a href="${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3004"}/orders" style="display: inline-block; background: #18181b; color: white; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 500;">
+              <p style="color: #52525b; line-height: 1.6; margin: 0 0 20px 0; font-size: 14px;">
+                We'll be in touch with updates on your order. If you have any questions, reply to this email or contact us at <a href="mailto:sales@subtex.com.au" style="color: #18181b;">sales@subtex.com.au</a>.
+              </p>
+              <a href="${viewOrderUrl}" style="display: inline-block; background: #18181b; color: white; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 500;">
                 View Order
               </a>
               <hr style="border: none; border-top: 1px solid #e4e4e7; margin: 30px 0;">
@@ -160,6 +183,7 @@ export async function sendOrderConfirmationEmail(
         </body>
       </html>
     `,
+    text: `Order Confirmed!\n\nHi ${name}, thank you for your order.\n\nOrder Number: ${orderNumber}\n\nItems:\n${itemsText}\n\nTotal (inc. GST): ${total}\n\nView your order: ${viewOrderUrl}\n\nSubtex\n16 Brewer Rd, Canning Vale, Perth, WA, 6155`,
   });
 }
 

@@ -35,7 +35,7 @@ interface RefundRequest {
     user: {
       name: string | null;
       email: string;
-    };
+    } | null;
   };
   user: {
     name: string | null;

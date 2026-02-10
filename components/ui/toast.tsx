@@ -15,6 +15,7 @@ import {
   TriangleAlertIcon,
   XIcon,
 } from "lucide-react"
+import Image from "next/image"
 import { cn } from "@/lib/utils"
 
 type ToastType = "success" | "error" | "warning" | "info" | "loading"
@@ -24,17 +25,23 @@ interface Toast {
   message: string
   type: ToastType
   description?: string
+  image?: string
+}
+
+interface ToastOptions {
+  description?: string
+  image?: string
 }
 
 interface ToastContextType {
   toasts: Toast[]
-  addToast: (message: string, type?: ToastType, description?: string) => string
+  addToast: (message: string, type?: ToastType, options?: ToastOptions) => string
   removeToast: (id: string) => void
-  success: (message: string, description?: string) => string
-  error: (message: string, description?: string) => string
-  warning: (message: string, description?: string) => string
-  info: (message: string, description?: string) => string
-  loading: (message: string, description?: string) => string
+  success: (message: string, options?: ToastOptions) => string
+  error: (message: string, options?: ToastOptions) => string
+  warning: (message: string, options?: ToastOptions) => string
+  info: (message: string, options?: ToastOptions) => string
+  loading: (message: string, options?: ToastOptions) => string
 }
 
 const ToastContext = createContext<ToastContextType | null>(null)
@@ -65,7 +72,19 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
         "hover:bg-accent/50"
       )}
     >
-      <div className="shrink-0">{icons[toast.type]}</div>
+      {toast.image ? (
+        <div className="shrink-0 relative size-10 rounded overflow-hidden border bg-muted">
+          <Image
+            src={toast.image}
+            alt=""
+            fill
+            className="object-cover"
+            sizes="40px"
+          />
+        </div>
+      ) : (
+        <div className="shrink-0">{icons[toast.type]}</div>
+      )}
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium">{toast.message}</p>
         {toast.description && (
@@ -87,9 +106,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const addToast = useCallback(
-    (message: string, type: ToastType = "info", description?: string) => {
+    (message: string, type: ToastType = "info", options?: ToastOptions) => {
       const id = Math.random().toString(36).substring(2, 9)
-      const toast: Toast = { id, message, type, description }
+      const toast: Toast = { id, message, type, description: options?.description, image: options?.image }
 
       setToasts((prev) => [...prev, toast])
 
@@ -106,27 +125,27 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   )
 
   const success = useCallback(
-    (message: string, description?: string) => addToast(message, "success", description),
+    (message: string, options?: ToastOptions) => addToast(message, "success", options),
     [addToast]
   )
 
   const error = useCallback(
-    (message: string, description?: string) => addToast(message, "error", description),
+    (message: string, options?: ToastOptions) => addToast(message, "error", options),
     [addToast]
   )
 
   const warning = useCallback(
-    (message: string, description?: string) => addToast(message, "warning", description),
+    (message: string, options?: ToastOptions) => addToast(message, "warning", options),
     [addToast]
   )
 
   const info = useCallback(
-    (message: string, description?: string) => addToast(message, "info", description),
+    (message: string, options?: ToastOptions) => addToast(message, "info", options),
     [addToast]
   )
 
   const loading = useCallback(
-    (message: string, description?: string) => addToast(message, "loading", description),
+    (message: string, options?: ToastOptions) => addToast(message, "loading", options),
     [addToast]
   )
 
@@ -163,19 +182,19 @@ export function ToastBridge() {
 }
 
 export const toast = Object.assign(
-  (message: string, options?: { description?: string }) => 
-    toastFn?.info(message, options?.description),
+  (message: string, options?: ToastOptions) => 
+    toastFn?.info(message, options),
   {
-    success: (message: string, options?: { description?: string }) => 
-      toastFn?.success(message, options?.description),
-    error: (message: string, options?: { description?: string }) => 
-      toastFn?.error(message, options?.description),
-    warning: (message: string, options?: { description?: string }) => 
-      toastFn?.warning(message, options?.description),
-    info: (message: string, options?: { description?: string }) => 
-      toastFn?.info(message, options?.description),
-    loading: (message: string, options?: { description?: string }) => 
-      toastFn?.loading(message, options?.description),
+    success: (message: string, options?: ToastOptions) => 
+      toastFn?.success(message, options),
+    error: (message: string, options?: ToastOptions) => 
+      toastFn?.error(message, options),
+    warning: (message: string, options?: ToastOptions) => 
+      toastFn?.warning(message, options),
+    info: (message: string, options?: ToastOptions) => 
+      toastFn?.info(message, options),
+    loading: (message: string, options?: ToastOptions) => 
+      toastFn?.loading(message, options),
     dismiss: (id: string) => toastFn?.removeToast(id),
   }
 )

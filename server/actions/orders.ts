@@ -6,6 +6,9 @@ import { headers } from "next/headers";
 import { orders, orderItems, orderStatusHistory } from "../schemas/orders";
 import { eq, desc, and, or, ilike, gte, isNotNull, isNull, asc, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { users } from "../schemas/users";
+import { products } from "../schemas/products";
+import { sendOrderConfirmationEmail } from "./email";
 
 async function requireAdmin() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -61,6 +64,151 @@ export async function getOrderById(orderId: string) {
   });
 
   return order;
+}
+
+/**
+ * Public order lookup by order number — used on the confirmation page.
+ * Returns limited data (no user details, no admin notes).
+ */
+export async function getOrderByNumber(orderNumber: string) {
+  if (!orderNumber) return null;
+
+  const order = await db.query.orders.findFirst({
+    where: eq(orders.orderNumber, orderNumber),
+    with: {
+      items: {
+        with: {
+          product: {
+            columns: {
+              imageUrl: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!order) return null;
+
+  // Return only the data needed for the confirmation page
+  return {
+    id: order.id,
+    orderNumber: order.orderNumber,
+    status: order.status,
+    deliveryMethod: order.deliveryMethod,
+    subtotalInCents: order.subtotalInCents,
+    discountInCents: order.discountInCents,
+    deliveryFeeInCents: order.deliveryFeeInCents,
+    holdingFeeInCents: order.holdingFeeInCents,
+    totalInCents: order.totalInCents,
+    createdAt: order.createdAt,
+    items: order.items.map((item) => ({
+      name: item.name,
+      color: item.color,
+      material: item.material,
+      size: item.size,
+      quantity: item.quantity,
+      unitPriceInCents: item.unitPriceInCents,
+      totalInCents: item.totalInCents,
+      imageUrl: item.product?.imageUrl || null,
+    })),
+  };
+}
+
+/**
+ * Atomically sends the order confirmation email if it hasn't been sent yet.
+ * Uses confirmationEmailSentAt as a guard to prevent duplicate sends.
+ * Safe to call from both the webhook and the confirmation page.
+ */
+export async function trySendOrderConfirmationEmail(orderId: string) {
+  try {
+    // Atomically mark as sent — only succeeds if not already sent
+    const [updatedOrder] = await db
+      .update(orders)
+      .set({ confirmationEmailSentAt: new Date() })
+      .where(
+        and(
+          eq(orders.id, orderId),
+          isNull(orders.confirmationEmailSentAt)
+        )
+      )
+      .returning();
+
+    if (!updatedOrder) {
+      // Already sent or order not found
+      return { sent: false, reason: "already_sent_or_not_found" };
+    }
+
+    // Fetch order items with product images for the email
+    const orderItemsList = await db
+      .select({
+        name: orderItems.name,
+        quantity: orderItems.quantity,
+        totalInCents: orderItems.totalInCents,
+        imageUrl: products.imageUrl,
+      })
+      .from(orderItems)
+      .leftJoin(products, eq(orderItems.productId, products.id))
+      .where(eq(orderItems.orderId, orderId));
+
+    const formatPrice = (cents: number) =>
+      new Intl.NumberFormat("en-AU", {
+        style: "currency",
+        currency: "AUD",
+      }).format(cents / 100);
+
+    const emailItems = orderItemsList.map((item) => ({
+      name: item.name,
+      quantity: item.quantity,
+      price: formatPrice(item.totalInCents),
+      imageUrl: item.imageUrl || undefined,
+    }));
+
+    // Determine recipient
+    const isGuestOrder = !updatedOrder.userId;
+    let recipientEmail: string | null = null;
+    let recipientName = "Customer";
+
+    if (isGuestOrder) {
+      recipientEmail = updatedOrder.guestEmail || null;
+      recipientName = updatedOrder.guestName || "Customer";
+    } else {
+      const [orderUser] = await db
+        .select({ name: users.name, email: users.email })
+        .from(users)
+        .where(eq(users.id, updatedOrder.userId!))
+        .limit(1);
+      if (orderUser) {
+        recipientEmail = orderUser.email;
+        recipientName = orderUser.name || "Customer";
+      }
+    }
+
+    if (!recipientEmail) {
+      console.log(
+        `No email address found for order ${updatedOrder.orderNumber} — skipping confirmation email`
+      );
+      return { sent: false, reason: "no_email" };
+    }
+
+    await sendOrderConfirmationEmail(
+      recipientEmail,
+      recipientName,
+      updatedOrder.orderNumber,
+      emailItems,
+      formatPrice(updatedOrder.totalInCents),
+      isGuestOrder,
+    );
+
+    console.log(
+      `Order confirmation email sent to ${recipientEmail} for ${updatedOrder.orderNumber}`
+    );
+
+    return { sent: true };
+  } catch (err) {
+    console.error("Failed to send order confirmation email:", err);
+    return { sent: false, reason: "error" };
+  }
 }
 
 export async function getUserOrders() {

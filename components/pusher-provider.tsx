@@ -13,6 +13,7 @@ import type { Channel } from "pusher-js";
 import {
   getPusherClient,
   getInventoryChannel,
+  PURCHASES_CHANNEL,
   PUSHER_EVENTS,
 } from "@/lib/pusher-client";
 import { useCart } from "@/hooks/use-cart";
@@ -33,6 +34,12 @@ interface StockReleasedEvent {
   productName: string;
   releasedQuantity: number;
   availableStock: number;
+}
+
+interface ProductPurchasedEvent {
+  buyerName: string;
+  productName: string;
+  productImage?: string;
 }
 
 interface PusherContextType {
@@ -84,6 +91,15 @@ export function PusherProvider({ children }: { children: ReactNode }) {
     return false;
   }, []);
 
+  // Look up product image from cart items
+  const getProductImage = useCallback(
+    (productId: string): string | undefined => {
+      const cartItem = items.find((item) => item.productId === productId);
+      return cartItem?.imageUrl;
+    },
+    [items]
+  );
+
   // Handle stock reserved event
   const handleStockReserved = useCallback(
     (event: StockReservedEvent) => {
@@ -97,6 +113,8 @@ export function PusherProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      const image = getProductImage(event.productId);
+
       // Show appropriate toast based on remaining stock
       if (event.availableStock === 0) {
         toast.error(
@@ -104,6 +122,7 @@ export function PusherProvider({ children }: { children: ReactNode }) {
           {
             description:
               "Complete your checkout soon or the item may become unavailable.",
+            image,
           }
         );
       } else if (event.availableStock <= 3) {
@@ -112,18 +131,20 @@ export function PusherProvider({ children }: { children: ReactNode }) {
           {
             description:
               "Someone just reserved some. Complete your checkout soon.",
+            image,
           }
         );
       } else {
         toast.info(`"${event.productName}" is in demand!`, {
           description: `Someone just reserved ${event.reservedQuantity}. ${event.availableStock} still available.`,
+          image,
         });
       }
 
       // Refresh the page to update stock displays
       router.refresh();
     },
-    [isOwnReservation, router]
+    [isOwnReservation, router, getProductImage]
   );
 
   // Handle stock released event
@@ -134,16 +155,42 @@ export function PusherProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      const image = getProductImage(event.productId);
+
       // Show a positive notification that stock is available
       toast.success(`Good news! "${event.productName}" is back in stock!`, {
         description: `${event.availableStock} now available.`,
+        image,
       });
 
       // Refresh to update stock displays
       router.refresh();
     },
-    [router]
+    [router, getProductImage]
   );
+
+  // Handle product purchased event (social proof)
+  const handleProductPurchased = useCallback(
+    (event: ProductPurchasedEvent) => {
+      toast(`${event.buyerName} just bought ${event.productName}`, {
+        image: event.productImage,
+      });
+    },
+    []
+  );
+
+  // Subscribe to global purchases channel for social proof notifications
+  useEffect(() => {
+    const pusher = getPusherClient();
+    const channel = pusher.subscribe(PURCHASES_CHANNEL);
+
+    channel.bind(PUSHER_EVENTS.PRODUCT_PURCHASED, handleProductPurchased);
+
+    return () => {
+      channel.unbind(PUSHER_EVENTS.PRODUCT_PURCHASED, handleProductPurchased);
+      pusher.unsubscribe(PURCHASES_CHANNEL);
+    };
+  }, [handleProductPurchased]);
 
   // Subscribe to inventory channels for products in cart
   useEffect(() => {
