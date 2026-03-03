@@ -201,6 +201,7 @@ export function UsersTable({ users, currentUserId, stats, onEditUser }: UsersTab
                 <TableRow>
                   <TableHead>User</TableHead>
                   <TableHead>Role</TableHead>
+                  <TableHead>Company</TableHead>
                   <TableHead className="text-center">Orders</TableHead>
                   <TableHead>Email Verified</TableHead>
                   <TableHead>Joined</TableHead>
@@ -240,6 +241,13 @@ export function UsersTable({ users, currentUserId, stats, onEditUser }: UsersTab
                           "User"
                         )}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {user.companyName ? (
+                        <span className="text-sm">{user.companyName}</span>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">—</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-center">{user.orderCount}</TableCell>
                     <TableCell>

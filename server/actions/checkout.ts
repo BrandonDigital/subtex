@@ -1,7 +1,7 @@
 "use server";
 
 import Stripe from "stripe";
-import { stripe, formatAmountForStripe } from "@/lib/stripe";
+import { stripe, formatAmountForStripe } from "@/lib/server/stripe";
 import { auth } from "../auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -14,8 +14,60 @@ import {
   PURCHASES_CHANNEL,
   PUSHER_EVENTS,
   type ProductPurchasedEvent,
-} from "@/lib/pusher";
-import { eq, sql } from "drizzle-orm";
+} from "@/lib/server/pusher";
+import { users } from "../schemas/users";
+import {
+  notifications,
+  type NewNotification,
+} from "../schemas/notifications";
+import { eq, sql, inArray } from "drizzle-orm";
+
+/**
+ * Notify all admin users of a new paid order.
+ * Fails silently so it never breaks the checkout flow.
+ */
+export async function notifyAdminsOfNewOrder(order: {
+  orderNumber: string;
+  totalInCents: number;
+  deliveryMethod: string;
+  id: string;
+}) {
+  try {
+    const adminUsers = await db.query.users.findMany({
+      where: eq(users.role, "admin"),
+      columns: { id: true },
+    });
+
+    if (adminUsers.length === 0) return;
+
+    const total = new Intl.NumberFormat("en-AU", {
+      style: "currency",
+      currency: "AUD",
+    }).format(order.totalInCents / 100);
+
+    const method =
+      order.deliveryMethod === "click_collect"
+        ? "Click & Collect"
+        : order.deliveryMethod === "local_delivery"
+          ? "Local Delivery"
+          : order.deliveryMethod;
+
+    const notifs: NewNotification[] = adminUsers.map((admin) => ({
+      userId: admin.id,
+      type: "order_update" as const,
+      title: `New Order #${order.orderNumber}`,
+      message: `${total} — ${method}`,
+      link: `/dashboard/orders`,
+      read: false,
+      emailSent: false,
+    }));
+
+    await db.insert(notifications).values(notifs);
+    revalidatePath("/dashboard");
+  } catch (err) {
+    console.error("Failed to notify admins of new order:", err);
+  }
+}
 
 /**
  * Generates a sequential order number using a PostgreSQL sequence.
@@ -38,7 +90,11 @@ export interface CheckoutItem {
   material?: string;
   size?: string;
   priceInCents: number;
+  basePriceInCents?: number;
+  appliedDiscountPercent?: number;
   quantity: number;
+  imageUrl?: string;
+  cuttingSpec?: { cutType: string; xCutMm: number; yCutMm: number };
 }
 
 export interface GuestInfo {
@@ -51,6 +107,7 @@ export interface CheckoutData {
   items: CheckoutItem[];
   deliveryMethod: "delivery" | "pickup";
   deliveryFeeInCents?: number;
+  cuttingFeeInCents?: number;
   holdingFeeInCents?: number;
   discountCodeId?: string;
   discountInCents?: number;
@@ -243,6 +300,8 @@ export interface DevCheckoutData {
   items: CheckoutItem[];
   deliveryMethod: "delivery" | "pickup";
   deliveryFeeInCents?: number;
+  cuttingFeeInCents?: number;
+  cuttingFeePerSheetInCents?: number;
   holdingFeeInCents?: number;
   discountCodeId?: string;
   discountInCents?: number;
@@ -281,6 +340,8 @@ export async function createDevOrder(data: DevCheckoutData) {
     items,
     deliveryMethod,
     deliveryFeeInCents = 0,
+    cuttingFeeInCents = 0,
+    cuttingFeePerSheetInCents = 0,
     holdingFeeInCents = 0,
     discountCodeId,
     discountInCents = 0,
@@ -300,7 +361,11 @@ export async function createDevOrder(data: DevCheckoutData) {
   // Calculate total
   const totalInCents = Math.max(
     0,
-    subtotalInCents - discountInCents + deliveryFeeInCents + holdingFeeInCents
+    subtotalInCents -
+      discountInCents +
+      deliveryFeeInCents +
+      cuttingFeeInCents +
+      holdingFeeInCents
   );
 
   // Generate sequential order number
@@ -309,6 +374,46 @@ export async function createDevOrder(data: DevCheckoutData) {
   // Map delivery method
   const dbDeliveryMethod =
     deliveryMethod === "pickup" ? "click_collect" : "local_delivery";
+
+  // Build complete order snapshot
+  const devSheetsWithCutting = items.filter((i) => i.cuttingSpec);
+  const devCuttingSheetCount = devSheetsWithCutting.reduce(
+    (sum, i) => sum + i.quantity,
+    0
+  );
+
+  const orderSnapshot = {
+    items: items.map((item) => ({
+      productId: item.productId,
+      partNumber: item.partNumber,
+      name: item.name,
+      color: item.color || null,
+      material: item.material || null,
+      size: item.size || null,
+      imageUrl: item.imageUrl || null,
+      quantity: item.quantity,
+      unitPriceInCents: item.priceInCents,
+      basePriceInCents: item.basePriceInCents || item.priceInCents,
+      appliedDiscountPercent: item.appliedDiscountPercent || 0,
+      lineTotalInCents: item.priceInCents * item.quantity,
+      cuttingSpec: item.cuttingSpec || null,
+    })),
+    pricing: {
+      subtotalInCents,
+      discountInCents,
+      deliveryFeeInCents,
+      cuttingFeeInCents,
+      holdingFeeInCents,
+      totalInCents,
+    },
+    cuttingService: {
+      perSheetFeeInCents: cuttingFeePerSheetInCents,
+      sheetCount: devCuttingSheetCount,
+      totalFeeInCents: cuttingFeeInCents,
+    },
+    deliveryMethod: dbDeliveryMethod,
+    deliveryAddress: deliveryAddressSnapshot || null,
+  };
 
   // Create the order
   const [order] = await db
@@ -322,6 +427,7 @@ export async function createDevOrder(data: DevCheckoutData) {
       discountInCents,
       discountCodeId: discountCodeId || null,
       deliveryFeeInCents,
+      cuttingFeeInCents,
       holdingFeeInCents,
       totalInCents,
       paidAt: new Date(),
@@ -331,6 +437,7 @@ export async function createDevOrder(data: DevCheckoutData) {
       deliveryAddressSnapshot: deliveryAddressSnapshot
         ? JSON.stringify(deliveryAddressSnapshot)
         : null,
+      orderSnapshot: JSON.stringify(orderSnapshot),
       customerNotes: customerNotes || null,
       stripePaymentIntentId: `dev_${Date.now()}`,
       stripeCheckoutSessionId: `dev_session_${Date.now()}`,
@@ -355,6 +462,7 @@ export async function createDevOrder(data: DevCheckoutData) {
       unitPriceInCents: item.priceInCents,
       discountPercent: 0,
       totalInCents: item.priceInCents * item.quantity,
+      cuttingSpec: item.cuttingSpec ? JSON.stringify(item.cuttingSpec) : null,
     });
   }
 
@@ -365,6 +473,17 @@ export async function createDevOrder(data: DevCheckoutData) {
     note: "Order placed via dev checkout (Stripe bypassed)",
     changedBy: userId,
   });
+
+  // Decrement product stock for each order item
+  for (const item of items) {
+    await db
+      .update(products)
+      .set({
+        stock: sql`GREATEST(${products.stock} - ${item.quantity}, 0)`,
+        updatedAt: new Date(),
+      })
+      .where(eq(products.id, item.productId));
+  }
 
   // Broadcast purchase notification for social proof
   try {
@@ -398,8 +517,14 @@ export async function createDevOrder(data: DevCheckoutData) {
     console.error("Failed to send purchase notification:", err);
   }
 
+  // Notify admin users of the new order
+  await notifyAdminsOfNewOrder(order);
+
   revalidatePath("/orders");
   revalidatePath("/dashboard/orders");
+  revalidatePath("/dashboard/inventory");
+  revalidatePath("/dashboard/deliveries");
+  revalidatePath("/dashboard/appointments");
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3004";
 
@@ -459,6 +584,8 @@ export interface PendingOrderData {
   items: CheckoutItem[];
   deliveryMethod: "delivery" | "pickup";
   deliveryFeeInCents?: number;
+  cuttingFeeInCents?: number;
+  cuttingFeePerSheetInCents?: number;
   holdingFeeInCents?: number;
   discountCodeId?: string;
   discountInCents?: number;
@@ -507,6 +634,8 @@ export async function createPendingOrder(data: PendingOrderData) {
     items,
     deliveryMethod,
     deliveryFeeInCents = 0,
+    cuttingFeeInCents = 0,
+    cuttingFeePerSheetInCents = 0,
     holdingFeeInCents = 0,
     discountCodeId,
     discountInCents = 0,
@@ -528,7 +657,11 @@ export async function createPendingOrder(data: PendingOrderData) {
   // Calculate total
   const totalInCents = Math.max(
     0,
-    subtotalInCents - discountInCents + deliveryFeeInCents + holdingFeeInCents
+    subtotalInCents -
+      discountInCents +
+      deliveryFeeInCents +
+      cuttingFeeInCents +
+      holdingFeeInCents
   );
 
   // Generate sequential order number
@@ -537,6 +670,46 @@ export async function createPendingOrder(data: PendingOrderData) {
   // Map delivery method
   const dbDeliveryMethod =
     deliveryMethod === "pickup" ? "click_collect" : "local_delivery";
+
+  // Build complete order snapshot — preserves all pricing, items, and fees at time of purchase
+  const sheetsWithCutting = items.filter((i) => i.cuttingSpec);
+  const cuttingSheetCount = sheetsWithCutting.reduce(
+    (sum, i) => sum + i.quantity,
+    0
+  );
+
+  const orderSnapshot = {
+    items: items.map((item) => ({
+      productId: item.productId,
+      partNumber: item.partNumber,
+      name: item.name,
+      color: item.color || null,
+      material: item.material || null,
+      size: item.size || null,
+      imageUrl: item.imageUrl || null,
+      quantity: item.quantity,
+      unitPriceInCents: item.priceInCents,
+      basePriceInCents: item.basePriceInCents || item.priceInCents,
+      appliedDiscountPercent: item.appliedDiscountPercent || 0,
+      lineTotalInCents: item.priceInCents * item.quantity,
+      cuttingSpec: item.cuttingSpec || null,
+    })),
+    pricing: {
+      subtotalInCents,
+      discountInCents,
+      deliveryFeeInCents,
+      cuttingFeeInCents,
+      holdingFeeInCents,
+      totalInCents,
+    },
+    cuttingService: {
+      perSheetFeeInCents: cuttingFeePerSheetInCents,
+      sheetCount: cuttingSheetCount,
+      totalFeeInCents: cuttingFeeInCents,
+    },
+    deliveryMethod: dbDeliveryMethod,
+    deliveryAddress: deliveryAddressSnapshot || null,
+  };
 
   // Create the order with "pending" status
   const [order] = await db
@@ -550,6 +723,7 @@ export async function createPendingOrder(data: PendingOrderData) {
       discountInCents,
       discountCodeId: discountCodeId || null,
       deliveryFeeInCents,
+      cuttingFeeInCents,
       holdingFeeInCents,
       totalInCents,
       collectionDate: collectionDate || null,
@@ -558,6 +732,7 @@ export async function createPendingOrder(data: PendingOrderData) {
       deliveryAddressSnapshot: deliveryAddressSnapshot
         ? JSON.stringify(deliveryAddressSnapshot)
         : null,
+      orderSnapshot: JSON.stringify(orderSnapshot),
       customerNotes: customerNotes || null,
       stripePaymentIntentId: paymentIntentId,
       // Guest checkout fields
@@ -585,6 +760,7 @@ export async function createPendingOrder(data: PendingOrderData) {
       unitPriceInCents: item.priceInCents,
       discountPercent: 0,
       totalInCents: item.priceInCents * item.quantity,
+      cuttingSpec: item.cuttingSpec ? JSON.stringify(item.cuttingSpec) : null,
     });
   }
 

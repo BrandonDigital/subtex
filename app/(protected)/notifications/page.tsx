@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
-import { Bell, Package, Truck, AlertCircle, Tag, Check } from "lucide-react";
+import { Bell, Package, Truck, AlertCircle, Tag } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -49,7 +49,7 @@ export default async function NotificationsPage() {
   if (notifications.length === 0) {
     return (
       <div className='py-12'>
-        <div className='container mx-auto px-4'>
+        <div className='w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8'>
           <div className='max-w-2xl mx-auto text-center'>
             <div className='h-24 w-24 rounded-full bg-muted flex items-center justify-center mx-auto mb-6'>
               <Bell className='h-12 w-12 text-muted-foreground' />
@@ -70,7 +70,7 @@ export default async function NotificationsPage() {
 
   return (
     <div className='py-12'>
-      <div className='container mx-auto px-4'>
+      <div className='w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8'>
         <div className='max-w-2xl mx-auto'>
           <div className='flex items-center justify-between mb-8'>
             <div>
@@ -106,7 +106,7 @@ export default async function NotificationsPage() {
                       )}
                     >
                       {notification.imageUrl ? (
-                        <div className='h-10 w-10 rounded-md overflow-hidden flex-shrink-0 bg-muted'>
+                        <div className='h-10 w-10 rounded-md overflow-hidden shrink-0 bg-muted'>
                           <Image
                             src={notification.imageUrl}
                             alt=''
@@ -118,7 +118,7 @@ export default async function NotificationsPage() {
                       ) : (
                         <div
                           className={cn(
-                            "h-10 w-10 rounded-full flex items-center justify-center flex-shrink-0",
+                            "h-10 w-10 rounded-full flex items-center justify-center shrink-0",
                             notification.read ? "bg-muted" : "bg-primary/10"
                           )}
                         >
@@ -147,7 +147,7 @@ export default async function NotificationsPage() {
                               {notification.message}
                             </p>
                           </div>
-                          <div className='flex items-center gap-2 flex-shrink-0'>
+                          <div className='flex items-center gap-2 shrink-0'>
                             <span className='text-xs text-muted-foreground'>
                               {formatTimeAgo(notification.createdAt)}
                             </span>

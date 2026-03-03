@@ -35,6 +35,7 @@ function PromoDialogContent({ onClose }: { onClose: () => void }) {
           fill
           className='object-cover'
           priority
+          sizes='(max-width: 768px) 100vw, 50vw'
         />
       </div>
 
@@ -196,9 +197,12 @@ export function PromoFooterBanner() {
       {/* Banner above footer */}
       <div
         className='bg-black cursor-pointer transition-transform hover:brightness-125'
+        role="button"
+        tabIndex={0}
         onClick={() => setDialogOpen(true)}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDialogOpen(true); } }}
       >
-        <div className='container mx-auto px-4 py-4'>
+        <div className='w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-4'>
           <div className='flex items-center justify-center gap-3 text-white'>
             <Gift className='h-5 w-5 shrink-0' />
             <span className='font-medium text-center'>

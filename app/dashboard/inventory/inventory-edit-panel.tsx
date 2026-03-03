@@ -23,7 +23,7 @@ interface Product {
   basePriceInCents: number;
   isAcm: boolean;
   acmColor: "white" | "black" | null;
-  acmMaterial: "gloss" | "matte" | null;
+  acmMaterial: "gloss/matte" | "gloss/primer" | null;
   acmSize: "standard" | "xl" | null;
   stock: number;
   lowStockThreshold: number;

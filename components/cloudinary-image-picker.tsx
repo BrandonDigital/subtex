@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import dynamic from "next/dynamic";
+import Image from "next/image";
 import Script from "next/script";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -148,11 +149,12 @@ export function CloudinaryImagePicker({
                 sizes="(max-width: 768px) 100vw, 50vw"
               />
             ) : (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
+              <Image
                 src={value}
                 alt="Product image"
-                className="w-full h-full object-cover"
+                fill
+                className="object-cover"
+                sizes="(max-width: 768px) 100vw, 50vw"
               />
             )}
             <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">

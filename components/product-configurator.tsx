@@ -1,12 +1,18 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Check, Minus, Plus, Bell, ShoppingCart } from "lucide-react";
+import { useState } from "react";
+import Image from "next/image";
+import { Check, Minus, Plus, Bell, ShoppingCart, ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { BackorderNotice } from "@/components/backorder-notice";
+import {
+  CutPlanConfigurator,
+  SHEET_DIMENSIONS,
+  type CuttingSpec,
+} from "@/components/cut-plan-configurator";
 
 // Types
 type Color = "white" | "black";
@@ -32,7 +38,7 @@ interface AcmProduct {
 
 interface ProductConfiguratorProps {
   acmProducts: AcmProduct[];
-  onAddToCart?: (productId: string, quantity: number) => void;
+  onAddToCart?: (productId: string, quantity: number, cuttingSpec?: CuttingSpec) => void;
   onNotifyMe?: (productId: string, email: string) => void;
 }
 
@@ -43,23 +49,114 @@ function formatPrice(priceInCents: number): string {
   }).format(priceInCents / 100);
 }
 
-function getStockStatus(
-  stock: number,
-  lowStockThreshold: number = 10
-): {
-  label: string;
-  variant: "default" | "secondary" | "destructive";
-} {
-  if (stock === 0) return { label: "Out of stock", variant: "destructive" };
-  if (stock <= lowStockThreshold)
-    return { label: `Low stock - ${stock} left`, variant: "secondary" };
-  return { label: `${stock} in stock`, variant: "default" };
-}
-
-const sizeLabels: Record<Size, { name: string; dimensions: string }> = {
-  standard: { name: "Standard", dimensions: "2440 × 1220mm" },
-  xl: { name: "XL", dimensions: "3050 × 1500mm" },
+const sizeInfo: Record<Size, { label: string; dimensions: string }> = {
+  standard: { label: "Standard", dimensions: "2440 × 1220 mm" },
+  xl: { label: "XL", dimensions: "3050 × 1500 mm" },
 };
+
+function QuantityAndCart({
+  quantity,
+  setQuantity,
+  currentStock,
+  discountPercent,
+  bulkDiscounts,
+  subtotal,
+  unitPrice,
+  formatPrice: fmt,
+  onAddToCart,
+}: {
+  quantity: number;
+  setQuantity: (fn: (prev: number) => number) => void;
+  currentStock: number;
+  discountPercent: number;
+  bulkDiscounts: BulkDiscount[];
+  subtotal: number;
+  unitPrice: number;
+  formatPrice: (n: number) => string;
+  onAddToCart: () => void;
+}) {
+  return (
+    <>
+      <div className="space-y-6">
+        <h4 className="text-xl font-bold uppercase tracking-tight">Quantity</h4>
+        <div className="flex flex-wrap items-center gap-6">
+          <div className="flex items-center border-2 border-black/10 overflow-hidden bg-white">
+            <button
+              type="button"
+              className="w-14 h-14 flex items-center justify-center hover:bg-black/5 transition-colors disabled:opacity-50"
+              onClick={() => setQuantity((prev) => Math.max(1, prev - 1))}
+              disabled={quantity <= 1}
+            >
+              <Minus className="w-5 h-5" />
+            </button>
+            <input
+              type="number"
+              min={1}
+              value={quantity}
+              onChange={(e) => setQuantity(() => Math.max(1, parseInt(e.target.value) || 1))}
+              className="w-20 h-14 text-center font-bold text-xl border-x-2 border-black/10 focus:outline-none"
+            />
+            <button
+              type="button"
+              className="w-14 h-14 flex items-center justify-center hover:bg-black/5 transition-colors"
+              onClick={() => setQuantity((prev) => prev + 1)}
+            >
+              <Plus className="w-5 h-5" />
+            </button>
+          </div>
+          
+          <div className="space-y-1">
+            <p className="font-medium text-black/60">{currentStock} in stock</p>
+            {discountPercent > 0 && (
+              <Badge variant="secondary" className="bg-green-100 text-green-800 hover:bg-green-100 border-green-200">
+                {discountPercent}% bulk discount applied
+              </Badge>
+            )}
+          </div>
+        </div>
+
+        <BackorderNotice
+          availableStock={currentStock}
+          requestedQuantity={quantity}
+        />
+
+        {bulkDiscounts.some((d) => d.minQuantity > quantity) && (
+          <p className="text-sm font-medium text-black/50">
+            Order {bulkDiscounts.find((d) => d.minQuantity > quantity)?.minQuantity}+ sheets for {bulkDiscounts.find((d) => d.minQuantity > quantity)?.discountPercent}% off
+          </p>
+        )}
+      </div>
+
+      <div className="bg-[#0A0A0A] text-white p-8 sm:p-10 space-y-8">
+        <div className="flex justify-between items-end">
+          <div>
+            <p className="text-white/50 font-medium mb-1 uppercase tracking-wider text-sm">Subtotal</p>
+            <div className="flex items-baseline gap-3">
+              <p className="text-4xl sm:text-5xl font-black tracking-tighter">
+                {fmt(subtotal)}
+              </p>
+              {discountPercent > 0 && (
+                <p className="text-lg text-white/40 line-through font-medium mb-1">
+                  {fmt(unitPrice * quantity)}
+                </p>
+              )}
+            </div>
+          </div>
+          <p className="text-white/50 text-sm pb-2 font-medium">inc. GST</p>
+        </div>
+        
+        <Button
+          size="lg"
+          className="w-full h-16 text-lg bg-white text-black hover:bg-white/90 font-bold uppercase tracking-wide transition-all hover:scale-[1.02]"
+          onClick={onAddToCart}
+        >
+          <ShoppingCart className="mr-3 h-6 w-6" />
+          Add to Cart
+        </Button>
+      </div>
+    </>
+  );
+}
 
 export function ProductConfigurator({
   acmProducts,
@@ -70,24 +167,36 @@ export function ProductConfigurator({
   const [selectedSize, setSelectedSize] = useState<Size | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [notifyEmail, setNotifyEmail] = useState("");
+  const [cuttingSpec, setCuttingSpec] = useState<CuttingSpec | null>(null);
+  const [cuttingEnabled, setCuttingEnabled] = useState(false);
 
-  // Get available colors from ACM products
-  const availableColors = [
-    ...new Set(
-      acmProducts.filter((p) => p.acmColor).map((p) => p.acmColor as Color)
-    ),
-  ];
+  const getSizesForColor = (color: Color) =>
+    acmProducts.filter((p) => p.acmColor === color && p.acmSize);
 
-  // Get available sizes for selected color
-  const availableSizes = selectedColor
-    ? [
-        ...new Set(
-          acmProducts
-            .filter((p) => p.acmColor === selectedColor && p.acmSize)
-            .map((p) => p.acmSize as Size)
-        ),
-      ]
-    : [];
+  const hasStock = (color: Color) =>
+    acmProducts.some((p) => p.acmColor === color && p.stock > 0);
+
+  const handleColorClick = (color: Color) => {
+    if (selectedColor === color) {
+      setSelectedColor(null);
+      setSelectedSize(null);
+    } else {
+      setSelectedColor(color);
+      setSelectedSize(null);
+    }
+    setQuantity(1);
+    setCuttingSpec(null);
+  };
+
+  const handleSizeSelect = (color: Color, size: Size) => {
+    setSelectedColor(color);
+    setSelectedSize(size);
+    setQuantity(1);
+    setCuttingSpec(null);
+  };
+
+  const whiteSizes = getSizesForColor("white");
+  const blackSizes = getSizesForColor("black");
 
   // Get selected product
   const selectedProduct =
@@ -96,35 +205,6 @@ export function ProductConfigurator({
           (p) => p.acmColor === selectedColor && p.acmSize === selectedSize
         )
       : null;
-
-  // Helper to check if a color option is available
-  const isColorAvailable = (color: Color): boolean => {
-    return acmProducts.some((p) => p.acmColor === color);
-  };
-
-  // Helper to check if a color option has stock
-  const isColorInStock = (color: Color): boolean => {
-    const colorProducts = acmProducts.filter((p) => p.acmColor === color);
-    if (colorProducts.length === 0) return false;
-    return colorProducts.some((p) => p.stock > 0);
-  };
-
-  // Helper to check if a size option is available for selected color
-  const isSizeAvailable = (size: Size): boolean => {
-    if (!selectedColor) return false;
-    return acmProducts.some(
-      (p) => p.acmColor === selectedColor && p.acmSize === size
-    );
-  };
-
-  // Helper to check if a size option has stock
-  const isSizeInStock = (size: Size): boolean => {
-    if (!selectedColor) return false;
-    const product = acmProducts.find(
-      (p) => p.acmColor === selectedColor && p.acmSize === size
-    );
-    return product ? product.stock > 0 : false;
-  };
 
   // Get bulk discounts from selected product
   const bulkDiscounts = selectedProduct?.bulkDiscounts || [];
@@ -142,23 +222,13 @@ export function ProductConfigurator({
   const currentStock = selectedProduct?.stock ?? 0;
   const isInStock = currentStock > 0;
 
-  // Reset downstream selections when upstream changes
-  useEffect(() => {
-    setSelectedSize(null);
-  }, [selectedColor]);
-
-  // Reset quantity when product changes
-  useEffect(() => {
-    setQuantity(1);
-  }, [selectedProduct?.id]);
-
-  const handleAddToCart = () => {
+  const handleAddToCartClick = () => {
     if (onAddToCart && selectedProduct) {
-      onAddToCart(selectedProduct.id, quantity);
+      onAddToCart(selectedProduct.id, quantity, cuttingSpec || undefined);
     }
   };
 
-  const handleNotifyMe = () => {
+  const handleNotifyMeClick = () => {
     if (selectedProduct && notifyEmail && onNotifyMe) {
       onNotifyMe(selectedProduct.id, notifyEmail);
       setNotifyEmail("");
@@ -166,326 +236,343 @@ export function ProductConfigurator({
   };
 
   return (
-    <section className='py-12 bg-background'>
-      <div className='container mx-auto px-4'>
-        <div className='max-w-2xl mx-auto space-y-8'>
-          {/* Step 1: Select Colour */}
-          <div className='space-y-4'>
-            <h2 className='text-lg font-semibold'>1. Select Colour</h2>
-            <div className='flex gap-4'>
-              {(["white", "black"] as Color[]).map((color) => {
-                const available = isColorAvailable(color);
-                const inStock = isColorInStock(color);
-                const isDisabled = !available || !inStock;
-                return (
-                  <button
-                    key={color}
-                    onClick={() => !isDisabled && setSelectedColor(color)}
-                    disabled={isDisabled}
-                    className={cn(
-                      "flex-1 relative rounded-lg border-2 p-6 transition-all",
-                      !isDisabled && "hover:border-primary/50 cursor-pointer",
-                      isDisabled && "opacity-50 cursor-not-allowed",
-                      selectedColor === color
-                        ? "border-primary bg-primary/5"
-                        : "border-border"
-                    )}
-                  >
-                    <div className='flex flex-col items-center gap-3'>
-                      <div
-                        className={cn(
-                          "h-12 w-12 rounded-full border-2",
-                          color === "white"
-                            ? "bg-white border-gray-300"
-                            : "bg-gray-900 border-gray-700"
-                        )}
-                      />
-                      <span className='font-medium capitalize'>{color}</span>
-                      {!available && (
-                        <span className='text-xs text-muted-foreground'>
-                          Not available
-                        </span>
-                      )}
-                      {available && !inStock && (
-                        <Badge variant='destructive' className='text-xs'>
-                          Out of Stock
-                        </Badge>
-                      )}
-                    </div>
-                    {selectedColor === color && (
-                      <div className='absolute top-2 right-2'>
-                        <Check className='h-5 w-5 text-primary' />
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
+    <section className="w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 pt-12 sm:pt-16">
+      <div className="mb-12">
+        <h2 className="text-6xl sm:text-8xl lg:text-[9rem] font-black tracking-tighter uppercase leading-[0.85] mb-4">
+          Shop Panels
+        </h2>
+        <p className="text-base sm:text-lg font-medium text-black/50 max-w-lg">
+          Select your colour to view available sizes and pricing.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2">
+        {/* White Card */}
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => handleColorClick("white")}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              handleColorClick("white");
+            }
+          }}
+          className={cn(
+            "group relative overflow-hidden text-left transition-all duration-500 border-2 cursor-pointer",
+            "bg-white text-black",
+            selectedColor === "white"
+              ? "border-black"
+              : "border-black/10 hover:border-black/30"
+          )}
+        >
+          <div className="p-8 sm:p-10">
+            <div className="flex justify-between items-start mb-16 sm:mb-24">
+              <div
+                className={cn(
+                  "w-14 h-14 rounded-full border-2 border-black/15 bg-white shadow-inner transition-all duration-300 flex items-center justify-center",
+                  selectedColor === "white" && "ring-4 ring-black/10"
+                )}
+              >
+                {selectedColor === "white" && (
+                  <Check className="w-6 h-6 text-black" strokeWidth={3} />
+                )}
+              </div>
+              <ArrowUpRight
+                className="w-16 h-16 sm:w-20 sm:h-20 opacity-15 group-hover:opacity-40 transition-all duration-500 group-hover:translate-x-1 group-hover:-translate-y-1"
+                strokeWidth={1}
+              />
             </div>
+            <h3 className="text-5xl sm:text-6xl lg:text-7xl font-black tracking-tighter uppercase leading-none mb-2">
+              White.
+            </h3>
+            <p className="text-sm font-medium text-black/50">
+              {hasStock("white") ? "In Stock" : "Out of Stock"} &middot;{" "}
+              {whiteSizes.length} size{whiteSizes.length !== 1 ? "s" : ""}
+            </p>
           </div>
 
-          {/* Step 2: Select Size */}
+          {/* Size reveal */}
           <div
             className={cn(
-              "space-y-4 transition-all duration-300",
-              selectedColor ? "opacity-100" : "opacity-40 pointer-events-none"
+              "grid transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]",
+              selectedColor === "white"
+                ? "grid-rows-[1fr] opacity-100"
+                : "grid-rows-[0fr] opacity-0"
             )}
           >
-            <h2 className='text-lg font-semibold'>2. Select Size</h2>
-            <div className='flex gap-4'>
-              {(["standard", "xl"] as Size[]).map((size) => {
-                const available = isSizeAvailable(size);
-                const inStock = isSizeInStock(size);
-                const isDisabled = !selectedColor || !available || !inStock;
-                return (
-                  <button
-                    key={size}
-                    onClick={() => !isDisabled && setSelectedSize(size)}
-                    disabled={isDisabled}
-                    className={cn(
-                      "flex-1 relative rounded-lg border-2 p-6 transition-all",
-                      selectedColor &&
-                        !isDisabled &&
-                        "hover:border-primary/50 cursor-pointer",
-                      isDisabled && "opacity-50 cursor-not-allowed",
-                      selectedSize === size
-                        ? "border-primary bg-primary/5"
-                        : "border-border"
-                    )}
-                  >
-                    <div className='flex flex-col items-center gap-2'>
-                      <span className='font-medium'>
-                        {sizeLabels[size].name}
-                      </span>
-                      <span className='text-sm text-muted-foreground'>
-                        {sizeLabels[size].dimensions}
-                      </span>
-                      {selectedColor && !available && (
-                        <span className='text-xs text-muted-foreground'>
-                          Not available
-                        </span>
+            <div className="overflow-hidden">
+              <div className="flex flex-col">
+                {whiteSizes.map((product) => {
+                  const size = product.acmSize as Size;
+                  const info = sizeInfo[size];
+                  const inStock = product.stock > 0;
+                  return (
+                    <button
+                      key={product.id}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSizeSelect("white", size);
+                      }}
+                      className={cn(
+                        "w-full flex items-center justify-between border-t px-8 sm:px-10 py-6 transition-all duration-300",
+                        selectedSize === size && selectedColor === "white"
+                          ? "border-black bg-black text-white"
+                          : inStock
+                          ? "border-black/10 hover:bg-black hover:text-white"
+                          : "border-black/5 opacity-40 pointer-events-none"
                       )}
-                      {selectedColor && available && !inStock && (
-                        <Badge variant='destructive' className='text-xs'>
-                          Out of Stock
-                        </Badge>
-                      )}
-                    </div>
-                    {selectedSize === size && (
-                      <div className='absolute top-2 right-2'>
-                        <Check className='h-5 w-5 text-primary' />
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="text-left">
+                          <p className="font-bold text-lg">{info.label}</p>
+                          <p className="text-sm opacity-60">
+                            {info.dimensions}
+                          </p>
+                        </div>
                       </div>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Product Image Display */}
-          {selectedProduct?.imageUrl && (
-            <div className='space-y-4'>
-              <div className='rounded-lg border bg-muted/30 overflow-hidden'>
-                <img
-                  src={selectedProduct.imageUrl}
-                  alt={selectedProduct.name}
-                  className='w-full h-64 object-contain bg-white'
-                />
+                      <div className="text-right">
+                        <p className="font-black text-xl">
+                          {formatPrice(product.basePriceInCents)}
+                        </p>
+                        <p className="text-xs opacity-50">inc. GST</p>
+                      </div>
+                    </button>
+                  );
+                })}
+                {whiteSizes.length === 0 && (
+                  <p className="text-sm text-black/40 py-4 text-center">
+                    No sizes available
+                  </p>
+                )}
               </div>
             </div>
-          )}
+          </div>
+        </div>
 
-          {/* Step 4: Quantity and Add to Cart */}
+        {/* Black Card */}
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => handleColorClick("black")}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              handleColorClick("black");
+            }
+          }}
+          className={cn(
+            "group relative overflow-hidden text-left transition-all duration-500 border-2 cursor-pointer",
+            "bg-[#0A0A0A] text-white",
+            selectedColor === "black"
+              ? "border-white"
+              : "border-white/10 hover:border-white/30"
+          )}
+        >
+          <div className="p-8 sm:p-10">
+            <div className="flex justify-between items-start mb-16 sm:mb-24">
+              <div
+                className={cn(
+                  "w-14 h-14 rounded-full border-2 border-white/15 bg-black shadow-inner transition-all duration-300 flex items-center justify-center",
+                  selectedColor === "black" && "ring-4 ring-white/10"
+                )}
+              >
+                {selectedColor === "black" && (
+                  <Check className="w-6 h-6 text-white" strokeWidth={3} />
+                )}
+              </div>
+              <ArrowUpRight
+                className="w-16 h-16 sm:w-20 sm:h-20 opacity-15 group-hover:opacity-40 transition-all duration-500 group-hover:translate-x-1 group-hover:-translate-y-1"
+                strokeWidth={1}
+              />
+            </div>
+            <h3 className="text-5xl sm:text-6xl lg:text-7xl font-black tracking-tighter uppercase leading-none mb-2">
+              Black.
+            </h3>
+            <p className="text-sm font-medium text-white/50">
+              {hasStock("black") ? "In Stock" : "Out of Stock"} &middot;{" "}
+              {blackSizes.length} size{blackSizes.length !== 1 ? "s" : ""}
+            </p>
+          </div>
+
+          {/* Size reveal */}
           <div
             className={cn(
-              "space-y-6 transition-all duration-300",
-              selectedProduct ? "opacity-100" : "opacity-40 pointer-events-none"
+              "grid transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]",
+              selectedColor === "black"
+                ? "grid-rows-[1fr] opacity-100"
+                : "grid-rows-[0fr] opacity-0"
             )}
           >
-            {selectedProduct && (
-              <>
-                {/* Selection Summary */}
-                <div className='rounded-lg border bg-muted/30 p-6 space-y-4'>
-                  <div className='flex items-start justify-between'>
-                    <div>
-                      <h3 className='font-semibold'>Your Selection</h3>
-                      <p className='text-muted-foreground capitalize'>
-                        {selectedProduct.name}
-                      </p>
-                      <p className='text-sm text-muted-foreground mt-1'>
-                        Part Number:{" "}
-                        {selectedProduct.partNumber || selectedProduct.id}
-                      </p>
-                    </div>
-                    <div className='text-right'>
-                      <p className='text-xl font-bold'>
-                        {formatPrice(selectedProduct.basePriceInCents)}
-                      </p>
-                      <p className='text-sm text-muted-foreground'>
-                        inc. GST each
-                      </p>
-                    </div>
+            <div className="overflow-hidden">
+              <div className="flex flex-col">
+                {blackSizes.map((product) => {
+                  const size = product.acmSize as Size;
+                  const info = sizeInfo[size];
+                  const inStock = product.stock > 0;
+                  return (
+                    <button
+                      key={product.id}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSizeSelect("black", size);
+                      }}
+                      className={cn(
+                        "w-full flex items-center justify-between border-t px-8 sm:px-10 py-6 transition-all duration-300",
+                        selectedSize === size && selectedColor === "black"
+                          ? "border-white bg-white text-black"
+                          : inStock
+                          ? "border-white/10 hover:bg-white hover:text-black"
+                          : "border-white/5 opacity-40 pointer-events-none"
+                      )}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="text-left">
+                          <p className="font-bold text-lg">{info.label}</p>
+                          <p className="text-sm opacity-60">
+                            {info.dimensions}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-black text-xl">
+                          {formatPrice(product.basePriceInCents)}
+                        </p>
+                        <p className="text-xs opacity-50">inc. GST</p>
+                      </div>
+                    </button>
+                  );
+                })}
+                {blackSizes.length === 0 && (
+                  <p className="text-sm text-white/40 py-4 text-center">
+                    No sizes available
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Configuration Panel (appears when a size is selected) */}
+      <div
+        className={cn(
+          "grid transition-all duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]",
+          selectedProduct ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+        )}
+      >
+        <div className="overflow-hidden">
+          {selectedProduct && (
+            <div className="p-8 sm:p-12 border-2 border-t-0 border-black/10 bg-white text-black">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-24">
+                
+                {/* Left Column: Details & Image */}
+                <div className="space-y-12">
+                  <div>
+                    <h3 className="text-3xl sm:text-4xl font-black uppercase tracking-tighter mb-2">
+                      Configuration.
+                    </h3>
+                    <p className="text-black/50 font-medium text-lg">
+                      {selectedProduct.name} &middot; {selectedProduct.partNumber || selectedProduct.id}
+                    </p>
                   </div>
 
-                  {/* Stock Status */}
-                  <div>
-                    <Badge
-                      variant={
-                        getStockStatus(
-                          selectedProduct.stock,
-                          selectedProduct.lowStockThreshold
-                        ).variant
-                      }
-                    >
-                      {
-                        getStockStatus(
-                          selectedProduct.stock,
-                          selectedProduct.lowStockThreshold
-                        ).label
-                      }
-                    </Badge>
-                  </div>
+                  {selectedProduct.imageUrl && (
+                    <div className="relative aspect-video w-full overflow-hidden bg-black/5">
+                      <Image
+                        src={selectedProduct.imageUrl}
+                        alt={selectedProduct.name}
+                        fill
+                        className="object-cover"
+                        sizes="(max-width: 1024px) 100vw, 50vw"
+                      />
+                    </div>
+                  )}
+
+                  {!isInStock && (
+                    <div className="p-8 space-y-6 border border-black/10">
+                      <div className="flex items-center gap-3">
+                        <Bell className="w-6 h-6" />
+                        <h4 className="text-xl font-bold uppercase tracking-tight">Out of Stock</h4>
+                      </div>
+                      <p className="text-black/60 font-medium">
+                        Enter your email to be notified when this panel is back in stock.
+                      </p>
+                      <div className="flex flex-col sm:flex-row gap-3">
+                        <Input
+                          type="email"
+                          placeholder="your@email.com"
+                          value={notifyEmail}
+                          onChange={(e) => setNotifyEmail(e.target.value)}
+                          className="h-14 border-black/20 bg-white text-base"
+                        />
+                        <Button 
+                          className="h-14 px-8 font-bold uppercase tracking-wide shrink-0" 
+                          onClick={handleNotifyMeClick} 
+                          disabled={!notifyEmail}
+                        >
+                          Notify Me
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                {isInStock ? (
-                  <>
-                    {/* Quantity Selector */}
-                    <div className='space-y-4'>
-                      <h2 className='text-lg font-semibold'>
-                        3. Select Quantity
-                      </h2>
-                      <div className='flex items-center gap-4'>
-                        <div className='flex items-center border rounded-lg'>
-                          <Button
-                            variant='ghost'
-                            size='icon'
-                            className='h-12 w-12 rounded-none rounded-l-lg'
-                            onClick={() =>
-                              setQuantity(Math.max(1, quantity - 1))
-                            }
-                            disabled={quantity <= 1}
-                          >
-                            <Minus className='h-4 w-4' />
-                          </Button>
-                          <Input
-                            type='number'
-                            min={1}
-                            value={quantity}
-                            onChange={(e) =>
-                              setQuantity(
-                                Math.max(1, parseInt(e.target.value) || 1)
-                              )
-                            }
-                            className='h-12 w-20 text-center border-0 rounded-none focus-visible:ring-0'
-                          />
-                          <Button
-                            variant='ghost'
-                            size='icon'
-                            className='h-12 w-12 rounded-none rounded-r-lg'
-                            onClick={() => setQuantity(quantity + 1)}
-                          >
-                            <Plus className='h-4 w-4' />
-                          </Button>
-                        </div>
-                        <span className='text-sm text-muted-foreground'>
-                          {currentStock} in stock
-                        </span>
-                      </div>
-
-                      {/* Backorder Notice */}
-                      <BackorderNotice
-                        availableStock={currentStock}
-                        requestedQuantity={quantity}
-                      />
-
-                      {/* Bulk Discount Info */}
-                      {discountPercent > 0 && (
-                        <div className='flex items-center gap-2 text-green-600'>
-                          <Badge
-                            variant='secondary'
-                            className='bg-green-100 text-green-700'
-                          >
-                            {discountPercent}% bulk discount applied
-                          </Badge>
-                        </div>
-                      )}
-
-                      {/* Next discount tier hint */}
-                      {bulkDiscounts.some((d) => d.minQuantity > quantity) && (
-                        <p className='text-sm text-muted-foreground'>
-                          Order{" "}
-                          {
-                            bulkDiscounts.find((d) => d.minQuantity > quantity)
-                              ?.minQuantity
-                          }
-                          + sheets for{" "}
-                          {
-                            bulkDiscounts.find((d) => d.minQuantity > quantity)
-                              ?.discountPercent
-                          }
-                          % off
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Subtotal and Add to Cart */}
-                    <div className='rounded-lg border bg-primary/5 p-6 space-y-4'>
-                      <div className='flex items-center justify-between text-lg'>
-                        <span className='font-medium'>Subtotal</span>
-                        <div className='text-right'>
-                          {discountPercent > 0 && (
-                            <p className='text-sm text-muted-foreground line-through'>
-                              {formatPrice(unitPrice * quantity)}
-                            </p>
-                          )}
-                          <p className='text-xl font-bold'>
-                            {formatPrice(subtotal)}
-                          </p>
-                          <p className='text-sm text-muted-foreground'>
-                            inc. GST
-                          </p>
-                        </div>
-                      </div>
-
-                      <Button
-                        size='lg'
-                        className='w-full h-14 text-lg'
-                        onClick={handleAddToCart}
-                      >
-                        <ShoppingCart className='mr-2 h-5 w-5' />
-                        Add to Cart
-                      </Button>
-                    </div>
-                  </>
-                ) : (
-                  /* Out of Stock - Notify Me */
-                  <div className='rounded-lg border border-destructive/20 bg-destructive/5 p-6 space-y-4'>
-                    <div className='flex items-center gap-2'>
-                      <Bell className='h-5 w-5' />
-                      <h3 className='font-semibold'>
-                        Get notified when back in stock
-                      </h3>
-                    </div>
-                    <p className='text-sm text-muted-foreground'>
-                      Enter your email and we&apos;ll let you know when this
-                      product is available again.
-                    </p>
-                    <div className='flex gap-2'>
-                      <Input
-                        type='email'
-                        placeholder='your@email.com'
-                        value={notifyEmail}
-                        onChange={(e) => setNotifyEmail(e.target.value)}
-                        className='flex-1'
-                      />
-                      <Button onClick={handleNotifyMe} disabled={!notifyEmail}>
-                        Notify Me
-                      </Button>
-                    </div>
+                {/* Right Column: Quantity & Cart (when cutting is disabled) */}
+                {isInStock && !cuttingEnabled && (
+                  <div className="space-y-12">
+                    <QuantityAndCart
+                      quantity={quantity}
+                      setQuantity={setQuantity}
+                      currentStock={currentStock}
+                      discountPercent={discountPercent}
+                      bulkDiscounts={bulkDiscounts}
+                      subtotal={subtotal}
+                      unitPrice={unitPrice}
+                      formatPrice={formatPrice}
+                      onAddToCart={handleAddToCartClick}
+                    />
                   </div>
                 )}
-              </>
-            )}
-          </div>
+
+              </div>
+
+              {/* Cutting Service - full width */}
+              {isInStock && selectedSize && (
+                <div className="space-y-6 mt-12">
+                  <div className="flex items-center gap-4">
+                    <h4 className="text-xl font-bold uppercase tracking-tight">Cutting Service</h4>
+                  </div>
+                  <CutPlanConfigurator
+                    sheetWidthMm={SHEET_DIMENSIONS[selectedSize]?.width || 2440}
+                    sheetHeightMm={SHEET_DIMENSIONS[selectedSize]?.height || 1220}
+                    cuttingSpec={cuttingSpec}
+                    onCuttingSpecChange={setCuttingSpec}
+                    onEnabledChange={setCuttingEnabled}
+                  />
+                </div>
+              )}
+
+              {/* Quantity & Subtotal below cutting (when cutting is enabled) */}
+              {isInStock && cuttingEnabled && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-24 mt-12">
+                  <QuantityAndCart
+                    quantity={quantity}
+                    setQuantity={setQuantity}
+                    currentStock={currentStock}
+                    discountPercent={discountPercent}
+                    bulkDiscounts={bulkDiscounts}
+                    subtotal={subtotal}
+                    unitPrice={unitPrice}
+                    formatPrice={formatPrice}
+                    onAddToCart={handleAddToCartClick}
+                  />
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </section>

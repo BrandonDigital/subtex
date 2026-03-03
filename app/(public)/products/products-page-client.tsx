@@ -70,6 +70,66 @@ interface ProductsPageClientProps {
 
 type SortOption = "newest" | "price-low" | "price-high" | "name";
 
+function FilterContent({
+  showAcmOnly,
+  setShowAcmOnly,
+  showInStockOnly,
+  setShowInStockOnly,
+  hasActiveFilters,
+  clearFilters,
+}: {
+  showAcmOnly: boolean;
+  setShowAcmOnly: (v: boolean) => void;
+  showInStockOnly: boolean;
+  setShowInStockOnly: (v: boolean) => void;
+  hasActiveFilters: boolean | string;
+  clearFilters: () => void;
+}) {
+  return (
+    <div className='space-y-6'>
+      <div>
+        <h3 className='font-medium mb-3'>Product Type</h3>
+        <div className='flex items-center space-x-2'>
+          <Checkbox
+            id='acm-only'
+            checked={showAcmOnly}
+            onCheckedChange={(checked) => setShowAcmOnly(checked === true)}
+          />
+          <Label htmlFor='acm-only' className='cursor-pointer'>
+            ACM Products Only
+          </Label>
+        </div>
+      </div>
+
+      <Separator />
+
+      <div>
+        <h3 className='font-medium mb-3'>Availability</h3>
+        <div className='flex items-center space-x-2'>
+          <Checkbox
+            id='in-stock'
+            checked={showInStockOnly}
+            onCheckedChange={(checked) => setShowInStockOnly(checked === true)}
+          />
+          <Label htmlFor='in-stock' className='cursor-pointer'>
+            In Stock Only
+          </Label>
+        </div>
+      </div>
+
+      {hasActiveFilters && (
+        <>
+          <Separator />
+          <Button variant='outline' className='w-full' onClick={clearFilters}>
+            <X className='h-4 w-4 mr-2' />
+            Clear Filters
+          </Button>
+        </>
+      )}
+    </div>
+  );
+}
+
 function formatPrice(priceInCents: number): string {
   return new Intl.NumberFormat("en-AU", {
     style: "currency",
@@ -139,53 +199,9 @@ export function ProductsPageClient({ products }: ProductsPageClientProps) {
 
   const hasActiveFilters = searchQuery || showAcmOnly || showInStockOnly;
 
-  const FilterContent = () => (
-    <div className='space-y-6'>
-      <div>
-        <h3 className='font-medium mb-3'>Product Type</h3>
-        <div className='flex items-center space-x-2'>
-          <Checkbox
-            id='acm-only'
-            checked={showAcmOnly}
-            onCheckedChange={(checked) => setShowAcmOnly(checked === true)}
-          />
-          <Label htmlFor='acm-only' className='cursor-pointer'>
-            ACM Products Only
-          </Label>
-        </div>
-      </div>
-
-      <Separator />
-
-      <div>
-        <h3 className='font-medium mb-3'>Availability</h3>
-        <div className='flex items-center space-x-2'>
-          <Checkbox
-            id='in-stock'
-            checked={showInStockOnly}
-            onCheckedChange={(checked) => setShowInStockOnly(checked === true)}
-          />
-          <Label htmlFor='in-stock' className='cursor-pointer'>
-            In Stock Only
-          </Label>
-        </div>
-      </div>
-
-      {hasActiveFilters && (
-        <>
-          <Separator />
-          <Button variant='outline' className='w-full' onClick={clearFilters}>
-            <X className='h-4 w-4 mr-2' />
-            Clear Filters
-          </Button>
-        </>
-      )}
-    </div>
-  );
-
   return (
     <section className='pt-4 pb-8 md:pt-6 md:pb-12'>
-      <div className='container mx-auto px-4'>
+      <div className='w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8'>
         {/* Search and Filters Bar */}
         <div className='flex flex-col md:flex-row gap-4 mb-8'>
           {/* Search */}
@@ -263,7 +279,7 @@ export function ProductsPageClient({ products }: ProductsPageClientProps) {
                   <SheetTitle>Filters</SheetTitle>
                 </SheetHeader>
                 <div className='flex-1 overflow-y-auto px-6 py-4'>
-                  <FilterContent />
+                  <FilterContent showAcmOnly={showAcmOnly} setShowAcmOnly={setShowAcmOnly} showInStockOnly={showInStockOnly} setShowInStockOnly={setShowInStockOnly} hasActiveFilters={hasActiveFilters} clearFilters={clearFilters} />
                 </div>
               </SheetContent>
             ) : (
@@ -272,7 +288,7 @@ export function ProductsPageClient({ products }: ProductsPageClientProps) {
                   <SheetTitle>Filters</SheetTitle>
                 </SheetHeader>
                 <div className='mt-6'>
-                  <FilterContent />
+                  <FilterContent showAcmOnly={showAcmOnly} setShowAcmOnly={setShowAcmOnly} showInStockOnly={showInStockOnly} setShowInStockOnly={setShowInStockOnly} hasActiveFilters={hasActiveFilters} clearFilters={clearFilters} />
                 </div>
               </SheetContent>
             )}
@@ -282,9 +298,9 @@ export function ProductsPageClient({ products }: ProductsPageClientProps) {
         <div className='flex gap-8'>
           {/* Desktop Sidebar Filters */}
           <aside className='hidden md:block w-64 shrink-0'>
-            <div className='sticky top-24 rounded-lg border p-4'>
+            <div className='sticky top-24 border p-4'>
               <h2 className='font-semibold mb-4'>Filters</h2>
-              <FilterContent />
+              <FilterContent showAcmOnly={showAcmOnly} setShowAcmOnly={setShowAcmOnly} showInStockOnly={showInStockOnly} setShowInStockOnly={setShowInStockOnly} hasActiveFilters={hasActiveFilters} clearFilters={clearFilters} />
             </div>
           </aside>
 
@@ -455,12 +471,12 @@ function ProductCard({ product }: { product: Product }) {
         {!isOutOfStock && (
           <div className='flex flex-col gap-2 w-full'>
             {/* Quantity Controls */}
-            <div className='flex items-center justify-between border rounded-md'>
+            <div className='flex items-center justify-between border'>
               <Button
                 variant='ghost'
                 size='icon'
-                className='h-8 w-8 rounded-l-md rounded-r-none'
-                onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                className='h-8 w-8'
+                onClick={() => setQuantity((prev) => Math.max(1, prev - 1))}
                 disabled={quantity <= 1}
               >
                 <Minus className='h-3 w-3' />
@@ -471,8 +487,8 @@ function ProductCard({ product }: { product: Product }) {
               <Button
                 variant='ghost'
                 size='icon'
-                className='h-8 w-8 rounded-r-md rounded-l-none'
-                onClick={() => setQuantity(quantity + 1)}
+                className='h-8 w-8'
+                onClick={() => setQuantity((prev) => prev + 1)}
                 disabled={quantity >= product.stock}
               >
                 <Plus className='h-3 w-3' />

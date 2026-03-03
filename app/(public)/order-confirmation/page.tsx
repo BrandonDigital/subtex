@@ -8,6 +8,7 @@ import {
   Truck,
   MapPin,
 } from "lucide-react";
+import { CuttingSpecBadge } from "@/components/cut-plan-configurator";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -49,7 +50,7 @@ export default async function OrderConfirmationPage({
   return (
     <div className='py-12'>
       <ClearCartOnSuccess />
-      <div className='container mx-auto px-4'>
+      <div className='w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8'>
         <div className='max-w-2xl mx-auto'>
           {/* Success header */}
           <div className='text-center mb-8'>
@@ -132,6 +133,12 @@ export default async function OrderConfirmationPage({
                               {item.material && <span>{item.material}</span>}
                               {item.size && <span>{item.size}</span>}
                             </div>
+                            {item.cuttingSpec && (() => {
+                              try {
+                                const spec = typeof item.cuttingSpec === "string" ? JSON.parse(item.cuttingSpec) : item.cuttingSpec;
+                                return <div className="mt-1"><CuttingSpecBadge spec={spec} /></div>;
+                              } catch { return null; }
+                            })()}
                           </div>
 
                           {/* Price */}

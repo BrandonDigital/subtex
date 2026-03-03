@@ -14,6 +14,7 @@ import { deliveryZones, type NewDeliveryZone } from "../schemas/deliveries";
 import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { sendBackInStockEmail, sendLowStockAlertEmail } from "./email";
+import { notifyAllUsersOfPriceChange } from "./settings";
 
 // Auth helper
 async function requireAdmin() {
@@ -30,7 +31,7 @@ async function requireAdmin() {
 // ============ PRODUCTS ============
 
 export async function createProduct(
-  data: Omit<NewProduct, "id" | "createdAt" | "updatedAt">
+  data: Omit<NewProduct, "id" | "createdAt" | "updatedAt">,
 ) {
   await requireAdmin();
 
@@ -51,6 +52,70 @@ export async function updateProduct(id: string, data: Partial<NewProduct>) {
 
   revalidatePath("/dashboard/products");
   revalidatePath("/dashboard/inventory");
+  revalidatePath("/products", "layout");
+  revalidatePath("/");
+  return product;
+}
+
+// Inline edit a single product field from the product page
+const ALLOWED_INLINE_FIELDS = [
+  "name",
+  "description",
+  "basePriceInCents",
+  "imageUrl",
+  "width",
+  "height",
+  "depth",
+  "weight",
+  "partNumber",
+  "metaTitle",
+  "metaDescription",
+] as const;
+
+type InlineField = (typeof ALLOWED_INLINE_FIELDS)[number];
+
+export async function updateProductFieldInline(
+  productId: string,
+  field: string,
+  value: string,
+) {
+  await requireAdmin();
+
+  if (!ALLOWED_INLINE_FIELDS.includes(field as InlineField)) {
+    throw new Error(`Field "${field}" is not editable inline`);
+  }
+
+  // Build the update data with proper type coercion
+  const updateData: Partial<NewProduct> = {};
+  const typedField = field as InlineField;
+
+  switch (typedField) {
+    case "basePriceInCents":
+      updateData.basePriceInCents = parseInt(value) || 0;
+      break;
+    case "width":
+    case "height":
+    case "depth":
+    case "weight":
+      updateData[typedField] = value || null;
+      break;
+    case "name":
+      if (!value) throw new Error("Product name cannot be empty");
+      updateData.name = value;
+      break;
+    default:
+      (updateData as Record<string, string | null>)[typedField] = value || null;
+  }
+
+  const [product] = await db
+    .update(products)
+    .set({ ...updateData, updatedAt: new Date() })
+    .where(eq(products.id, productId))
+    .returning();
+
+  revalidatePath("/dashboard/products");
+  revalidatePath("/dashboard/inventory");
+  revalidatePath("/products", "layout");
   revalidatePath("/");
   return product;
 }
@@ -68,7 +133,7 @@ export async function deleteProduct(id: string) {
 export async function updateStock(
   productId: string,
   newStock: number,
-  notifySubscribers: boolean = false
+  notifySubscribers: boolean = false,
 ) {
   const admin = await requireAdmin();
 
@@ -96,7 +161,7 @@ export async function updateStock(
       admin.email || "",
       product.name,
       product.partNumber || product.id,
-      newStock
+      newStock,
     ).catch(console.error);
   }
 
@@ -105,7 +170,7 @@ export async function updateStock(
     const subscribers = await db.query.stockSubscriptions.findMany({
       where: and(
         eq(stockSubscriptions.productId, productId),
-        eq(stockSubscriptions.notified, false)
+        eq(stockSubscriptions.notified, false),
       ),
     });
 
@@ -115,7 +180,7 @@ export async function updateStock(
     // Send emails to all subscribers
     for (const sub of subscribers) {
       sendBackInStockEmail(sub.email, product.name, productUrl).catch(
-        console.error
+        console.error,
       );
     }
 
@@ -135,7 +200,7 @@ export async function updateStock(
 
 export async function updateHoldingFee(
   productId: string,
-  holdingFeeInCents: number
+  holdingFeeInCents: number,
 ) {
   await requireAdmin();
 
@@ -151,7 +216,7 @@ export async function updateHoldingFee(
 
 export async function updateLowStockThreshold(
   productId: string,
-  threshold: number
+  threshold: number,
 ) {
   await requireAdmin();
 
@@ -168,7 +233,7 @@ export async function updateLowStockThreshold(
 // ============ BULK DISCOUNTS ============
 
 export async function createBulkDiscount(
-  data: Omit<NewBulkDiscount, "id" | "createdAt" | "updatedAt">
+  data: Omit<NewBulkDiscount, "id" | "createdAt" | "updatedAt">,
 ) {
   await requireAdmin();
 
@@ -180,7 +245,7 @@ export async function createBulkDiscount(
 
 export async function updateBulkDiscount(
   id: string,
-  data: Partial<NewBulkDiscount>
+  data: Partial<NewBulkDiscount>,
 ) {
   await requireAdmin();
 
@@ -216,7 +281,7 @@ export async function getDeliveryZones() {
 }
 
 export async function createDeliveryZone(
-  data: Omit<NewDeliveryZone, "id" | "createdAt" | "updatedAt">
+  data: Omit<NewDeliveryZone, "id" | "createdAt" | "updatedAt">,
 ) {
   await requireAdmin();
 
@@ -227,9 +292,13 @@ export async function createDeliveryZone(
 
 export async function updateDeliveryZone(
   id: string,
-  data: Partial<NewDeliveryZone>
+  data: Partial<NewDeliveryZone>,
 ) {
   await requireAdmin();
+
+  const oldZone = await db.query.deliveryZones.findFirst({
+    where: eq(deliveryZones.id, id),
+  });
 
   const [zone] = await db
     .update(deliveryZones)
@@ -238,6 +307,43 @@ export async function updateDeliveryZone(
     .returning();
 
   revalidatePath("/dashboard/deliveries");
+
+  if (oldZone && zone) {
+    const feeChanged =
+      (data.baseFeeInCents !== undefined &&
+        data.baseFeeInCents !== oldZone.baseFeeInCents) ||
+      (data.perSheetFeeInCents !== undefined &&
+        data.perSheetFeeInCents !== oldZone.perSheetFeeInCents);
+
+    if (feeChanged) {
+      const formatPrice = (cents: number) =>
+        new Intl.NumberFormat("en-AU", {
+          style: "currency",
+          currency: "AUD",
+        }).format(cents / 100);
+
+      const parts: string[] = [];
+
+      if (zone.baseFeeInCents !== oldZone.baseFeeInCents) {
+        parts.push(
+          `base fee ${formatPrice(oldZone.baseFeeInCents)} → ${formatPrice(zone.baseFeeInCents)}`
+        );
+      }
+      if (zone.perSheetFeeInCents !== oldZone.perSheetFeeInCents) {
+        parts.push(
+          `per-sheet fee ${formatPrice(oldZone.perSheetFeeInCents)} → ${formatPrice(zone.perSheetFeeInCents)}`
+        );
+      }
+
+      const title = "Delivery Fee Updated";
+      const message = `${zone.name} delivery zone pricing has changed: ${parts.join(", ")}.`;
+
+      notifyAllUsersOfPriceChange(title, message, "/checkout").catch(
+        console.error
+      );
+    }
+  }
+
   return zone;
 }
 
@@ -259,7 +365,7 @@ export async function getStockSubscribers(productId: string) {
   return db.query.stockSubscriptions.findMany({
     where: and(
       eq(stockSubscriptions.productId, productId),
-      eq(stockSubscriptions.notified, false)
+      eq(stockSubscriptions.notified, false),
     ),
   });
 }
@@ -268,7 +374,7 @@ export async function getStockSubscriberCount(productId: string) {
   const subscribers = await db.query.stockSubscriptions.findMany({
     where: and(
       eq(stockSubscriptions.productId, productId),
-      eq(stockSubscriptions.notified, false)
+      eq(stockSubscriptions.notified, false),
     ),
   });
   return subscribers.length;

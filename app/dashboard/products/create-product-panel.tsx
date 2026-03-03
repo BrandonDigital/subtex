@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { ArrowLeft, Loader2, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -118,9 +119,18 @@ export function CreateProductPanel({
     value: string | number | boolean,
   ) => {
     setFormData((prev) => {
-      const updated = { ...prev, [field]: value };
+      // Auto-capitalize part number
+      const processedValue =
+        field === "partNumber" && typeof value === "string"
+          ? value.toUpperCase()
+          : value;
+      const updated = { ...prev, [field]: processedValue };
       // Auto-generate slug from name if slug is empty
       if (field === "name" && typeof value === "string" && !prev.slug) {
+        updated.slug = generateSlug(value);
+      }
+      // Auto-generate slug from part number if slug is empty
+      if (field === "partNumber" && typeof value === "string" && !prev.slug) {
         updated.slug = generateSlug(value);
       }
       return updated;
@@ -164,12 +174,13 @@ export function CreateProductPanel({
     try {
       const productData = {
         status: formData.status,
-        partNumber: formData.partNumber || null,
-        slug: formData.slug || generateSlug(formData.name) || null,
-        name: formData.name,
-        description: formData.description || null,
+        partNumber: formData.partNumber.trim() || null,
+        slug:
+          formData.slug.trim() || generateSlug(formData.name.trim()) || null,
+        name: formData.name.trim(),
+        description: formData.description.trim() || null,
         basePriceInCents: formData.basePriceInCents,
-        imageUrl: formData.imageUrl || null,
+        imageUrl: formData.imageUrl.trim() || null,
         isAcm: formData.isAcm,
         acmColor:
           formData.isAcm && formData.acmColor
@@ -177,19 +188,19 @@ export function CreateProductPanel({
             : null,
         acmMaterial:
           formData.isAcm && formData.acmMaterial
-            ? (formData.acmMaterial as "gloss" | "matte")
+            ? (formData.acmMaterial as "gloss/matte" | "gloss/primer")
             : null,
         acmSize:
           formData.isAcm && formData.acmSize
             ? (formData.acmSize as "standard" | "xl")
             : null,
         stock: formData.initialStock,
-        width: formData.width || null,
-        height: formData.height || null,
-        depth: formData.depth || null,
-        weight: formData.weight || null,
-        metaTitle: formData.metaTitle || null,
-        metaDescription: formData.metaDescription || null,
+        width: formData.width.trim() || null,
+        height: formData.height.trim() || null,
+        depth: formData.depth.trim() || null,
+        weight: formData.weight.trim() || null,
+        metaTitle: formData.metaTitle.trim() || null,
+        metaDescription: formData.metaDescription.trim() || null,
       };
 
       const newProduct = await createProduct(productData);
@@ -322,11 +333,12 @@ export function CreateProductPanel({
                 {formData.imageUrl ? (
                   <div className='relative group'>
                     <div className='relative aspect-video rounded-lg overflow-hidden border bg-muted'>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
+                      <Image
                         src={formData.imageUrl}
                         alt='Product image'
-                        className='w-full h-full object-cover'
+                        fill
+                        className='object-cover'
+                        sizes='(max-width: 768px) 100vw, 50vw'
                       />
                       <div className='absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2'>
                         <Button
@@ -434,8 +446,8 @@ export function CreateProductPanel({
                           <SelectValue placeholder='Select material' />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value='gloss'>Gloss</SelectItem>
-                          <SelectItem value='matte'>Matte</SelectItem>
+                          <SelectItem value='gloss/matte'>Gloss/Matte</SelectItem>
+                          <SelectItem value='gloss/primer'>Gloss/Primer</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -545,7 +557,7 @@ export function CreateProductPanel({
                     <div className='space-y-2'>
                       {formData.bulkDiscounts.map((discount, index) => (
                         <div
-                          key={`discount-${index}`}
+                          key={`${discount.minQuantity}-${discount.discountPercent}`}
                           className='flex items-center gap-2'
                         >
                           <div className='flex-1'>

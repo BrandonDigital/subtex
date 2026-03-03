@@ -116,7 +116,7 @@ export function CustomerDetailPanel({
   return (
     <>
       {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/50 z-40" onClick={onClose} />
+      <div className="fixed inset-0 bg-black/50 z-40" role="button" tabIndex={0} onClick={onClose} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClose(); } }} />
 
       {/* Panel */}
       <div className="fixed inset-y-0 right-0 w-full max-w-xl bg-background shadow-lg z-50 overflow-y-auto">

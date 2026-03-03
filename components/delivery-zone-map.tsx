@@ -25,7 +25,7 @@ interface DeliveryZoneMapProps {
   onOutOfRange?: () => void;
 }
 
-// Warehouse location: 16 Brewer Rd, Canning Vale, WA
+// Warehouse location: 14B Brewer Rd, Canning Vale, WA
 const WAREHOUSE_LOCATION = {
   lat: -32.0687,
   lng: 115.9191,
@@ -195,7 +195,7 @@ export function DeliveryZoneMap({
         new libs.Marker({
           position: WAREHOUSE_LOCATION,
           map,
-          title: "Subtex Warehouse - 16 Brewer Rd, Canning Vale",
+          title: "Subtex Warehouse - 14B Brewer Rd, Canning Vale",
           icon: {
             path: libs.SymbolPath.CIRCLE,
             scale: 8,

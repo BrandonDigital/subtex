@@ -168,7 +168,7 @@ export async function sendBulkEmailNotification({
                   <hr style="border: none; border-top: 1px solid #e4e4e7; margin: 30px 0;">
                   <p style="color: #a1a1aa; font-size: 14px; margin: 0;">
                     Subtex<br>
-                    16 Brewer Rd, Canning Vale, Perth, WA, 6155
+                    14B Brewer Rd, Canning Vale, Perth, WA, 6155
                   </p>
                 </div>
               </div>

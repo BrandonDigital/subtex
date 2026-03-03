@@ -5,7 +5,8 @@ import { NextRequest, NextResponse } from "next/server";
 // Production URLs - any other NEXT_PUBLIC_APP_URL is treated as a dev site
 const productionUrls = ["https://subtex.com.au", "https://www.subtex.com.au"];
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
-const isDevSite = appUrl !== "" && !productionUrls.includes(appUrl);
+const isLocalhost = appUrl.includes("localhost") || appUrl.includes("127.0.0.1");
+const isDevSite = appUrl !== "" && !productionUrls.includes(appUrl) && !isLocalhost;
 
 // Routes that require authentication
 const protectedRoutes = ["/account", "/orders", "/notifications"];

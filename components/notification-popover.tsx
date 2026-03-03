@@ -68,67 +68,27 @@ function formatTimeAgo(date: Date | string): string {
   }).format(then);
 }
 
-export function NotificationPopover({
-  notifications,
-  unreadCount,
-}: NotificationPopoverProps) {
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const [popoverOpen, setPopoverOpen] = useState(false);
-  const [isPending, startTransition] = useTransition();
-  const [localNotifications, setLocalNotifications] = useState(notifications);
-  const [localUnreadCount, setLocalUnreadCount] = useState(unreadCount);
-  const router = useRouter();
+interface NotificationContentProps {
+  isMobile?: boolean;
+  localUnreadCount: number;
+  displayNotifications: Notification[];
+  handleMarkAllRead: () => void;
+  isPending: boolean;
+  handleNotificationClick: (notification: Notification) => void;
+  closeAll: () => void;
+}
 
-  const closeAll = () => {
-    setSheetOpen(false);
-    setPopoverOpen(false);
-  };
-
-  const handleNotificationClick = (notification: Notification) => {
-    if (!notification.read) {
-      // Optimistically update UI
-      setLocalNotifications((prev) =>
-        prev.map((n) => (n.id === notification.id ? { ...n, read: true } : n))
-      );
-      setLocalUnreadCount((prev) => Math.max(0, prev - 1));
-
-      // Mark as read in background
-      startTransition(async () => {
-        await markNotificationAsRead(notification.id);
-        router.refresh();
-      });
-    }
-
-    closeAll();
-
-    // Navigate if there's a link
-    if (notification.link) {
-      router.push(notification.link);
-    }
-  };
-
-  const handleMarkAllRead = () => {
-    // Optimistically update UI
-    setLocalNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-    setLocalUnreadCount(0);
-
-    startTransition(async () => {
-      await markAllNotificationsAsRead();
-      router.refresh();
-    });
-  };
-
-  const displayNotifications = localNotifications.slice(0, 5);
-  const hasMore = localNotifications.length > 5;
-
-  // Shared notification content
-  const NotificationContent = ({
-    isMobile = false,
-  }: {
-    isMobile?: boolean;
-  }) => (
+function NotificationContent({
+  isMobile = false,
+  localUnreadCount,
+  displayNotifications,
+  handleMarkAllRead,
+  isPending,
+  handleNotificationClick,
+  closeAll,
+}: NotificationContentProps) {
+  return (
     <>
-      {/* Header - only shown on desktop */}
       {!isMobile && (
         <div className='flex items-center justify-between border-b px-4 py-3'>
           <div>
@@ -158,7 +118,6 @@ export function NotificationPopover({
         </div>
       )}
 
-      {/* Mobile: Mark all read button */}
       {isMobile && localUnreadCount > 0 && (
         <div className='flex justify-end px-4 py-2 border-b'>
           <Button
@@ -178,7 +137,6 @@ export function NotificationPopover({
         </div>
       )}
 
-      {/* Notifications List */}
       {displayNotifications.length === 0 ? (
         <div className='py-8 text-center flex-1 flex flex-col items-center justify-center'>
           <Bell className='h-8 w-8 mx-auto text-muted-foreground/50 mb-2' />
@@ -255,7 +213,6 @@ export function NotificationPopover({
         </ScrollArea>
       )}
 
-      {/* Footer */}
       <div className='border-t p-2'>
         <Link href='/notifications' onClick={closeAll}>
           <Button variant='ghost' className='w-full h-8 text-xs'>
@@ -265,8 +222,65 @@ export function NotificationPopover({
       </div>
     </>
   );
+}
 
-  // Trigger button
+export function NotificationPopover({
+  notifications,
+  unreadCount,
+}: NotificationPopoverProps) {
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const [localNotifications, setLocalNotifications] = useState(notifications);
+  const [localUnreadCount, setLocalUnreadCount] = useState(unreadCount);
+  const router = useRouter();
+
+  const closeAll = () => {
+    setSheetOpen(false);
+    setPopoverOpen(false);
+  };
+
+  const handleNotificationClick = (notification: Notification) => {
+    if (!notification.read) {
+      setLocalNotifications((prev) =>
+        prev.map((n) => (n.id === notification.id ? { ...n, read: true } : n))
+      );
+      setLocalUnreadCount((prev) => Math.max(0, prev - 1));
+
+      startTransition(async () => {
+        await markNotificationAsRead(notification.id);
+        router.refresh();
+      });
+    }
+
+    closeAll();
+
+    if (notification.link) {
+      router.push(notification.link);
+    }
+  };
+
+  const handleMarkAllRead = () => {
+    setLocalNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    setLocalUnreadCount(0);
+
+    startTransition(async () => {
+      await markAllNotificationsAsRead();
+      router.refresh();
+    });
+  };
+
+  const displayNotifications = localNotifications.slice(0, 5);
+
+  const contentProps = {
+    localUnreadCount,
+    displayNotifications,
+    handleMarkAllRead,
+    isPending,
+    handleNotificationClick,
+    closeAll,
+  };
+
   const TriggerButton = (
     <Button variant='ghost' size='icon' className='relative'>
       <Bell className='h-5 w-5' />
@@ -279,7 +293,6 @@ export function NotificationPopover({
 
   return (
     <>
-      {/* Mobile: Full-screen sheet from right (leaves room for mobile nav) */}
       <div className='lg:hidden'>
         <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
           <SheetTrigger asChild>{TriggerButton}</SheetTrigger>
@@ -288,7 +301,6 @@ export function NotificationPopover({
             hideOverlay
             className='h-[calc(100dvh-65px)] w-full flex flex-col p-0 [&>button]:hidden top-0 bottom-auto shadow-none'
           >
-            {/* Header with back button and centered title */}
             <div className='flex items-center border-b px-2 py-3 relative'>
               <Button
                 variant='ghost'
@@ -306,17 +318,16 @@ export function NotificationPopover({
             <SheetHeader className='sr-only'>
               <SheetTitle>Notifications</SheetTitle>
             </SheetHeader>
-            <NotificationContent isMobile />
+            <NotificationContent isMobile {...contentProps} />
           </SheetContent>
         </Sheet>
       </div>
 
-      {/* Desktop: Popover */}
       <div className='hidden lg:block'>
         <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
           <PopoverTrigger asChild>{TriggerButton}</PopoverTrigger>
           <PopoverContent align='end' className='w-80 p-0'>
-            <NotificationContent />
+            <NotificationContent {...contentProps} />
           </PopoverContent>
         </Popover>
       </div>

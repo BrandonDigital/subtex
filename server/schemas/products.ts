@@ -13,7 +13,7 @@ import { relations } from "drizzle-orm";
 import { users } from "./users";
 
 export const colorEnum = pgEnum("color", ["white", "black"]);
-export const materialEnum = pgEnum("material", ["gloss", "matte"]);
+export const materialEnum = pgEnum("material", ["gloss/matte", "gloss/primer"]);
 export const sizeEnum = pgEnum("size", ["standard", "xl"]);
 export const productStatusEnum = pgEnum("product_status", ["draft", "active"]);
 

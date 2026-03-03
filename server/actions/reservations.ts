@@ -18,7 +18,7 @@ import {
   PUSHER_EVENTS,
   type StockReservedEvent,
   type StockReleasedEvent,
-} from "@/lib/pusher";
+} from "@/lib/server/pusher";
 
 // Reservation duration in minutes
 const RESERVATION_DURATION_MINUTES = 5;

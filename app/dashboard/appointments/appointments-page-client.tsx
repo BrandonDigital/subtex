@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
+import Image from "next/image";
 import {
   CalendarDays,
   Clock,
@@ -22,13 +23,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+  SheetFooter,
+} from "@/components/ui/sheet";
 import Signature from "@/components/ui/signature";
 import {
   markOrderPacking,
@@ -508,8 +509,8 @@ export function AppointmentsPageClient({
         </Card>
       )}
 
-      {/* Signature Collection Dialog */}
-      <Dialog
+      {/* Signature Collection Sheet */}
+      <Sheet
         open={signatureDialogOpen}
         onOpenChange={(open) => {
           if (!signatureSubmitting) {
@@ -517,131 +518,149 @@ export function AppointmentsPageClient({
           }
         }}
       >
-        <DialogContent className='sm:max-w-xl'>
-          <DialogHeader>
-            <DialogTitle className='flex items-center gap-2'>
-              <PenLine className='h-5 w-5' />
-              Sign Off Collection — #{signatureOrderNumber}
-            </DialogTitle>
-            <DialogDescription>
-              Both the warehouse staff (sender) and the customer (receiver) must
-              sign below to confirm the order handover.
-            </DialogDescription>
-          </DialogHeader>
+        <SheetContent
+          side='right'
+          className='w-full sm:max-w-full inset-y-0 border-l-0 p-0'
+        >
+          <div className='flex flex-col h-full'>
+            <SheetHeader className='border-b px-6 py-4'>
+              <SheetTitle className='flex items-center gap-2 text-lg'>
+                <PenLine className='h-5 w-5' />
+                Sign Off Collection — #{signatureOrderNumber}
+              </SheetTitle>
+              <SheetDescription>
+                Both the warehouse staff (sender) and the customer (receiver)
+                must sign below to confirm the order handover.
+              </SheetDescription>
+            </SheetHeader>
 
-          <div className='space-y-6 py-2'>
-            {/* Sender (warehouse) signature */}
-            <Signature
-              label='Sender (Warehouse Staff)'
-              height={140}
-              onChange={setSenderSignature}
-            />
+            <div className='flex-1 overflow-y-auto px-6 py-6'>
+              <div className='max-w-2xl mx-auto space-y-8'>
+                <Signature
+                  label='Sender (Warehouse Staff)'
+                  height={200}
+                  onChange={setSenderSignature}
+                />
 
-            <Separator />
+                <Separator />
 
-            {/* Receiver (customer) signature */}
-            <Signature
-              label='Receiver (Customer)'
-              height={140}
-              onChange={setReceiverSignature}
-            />
+                <Signature
+                  label='Receiver (Customer)'
+                  height={200}
+                  onChange={setReceiverSignature}
+                />
+              </div>
+            </div>
+
+            <SheetFooter className='border-t px-6 py-4 flex-row justify-end gap-2'>
+              <Button
+                variant='outline'
+                onClick={() => setSignatureDialogOpen(false)}
+                disabled={signatureSubmitting}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSignatureSubmit}
+                disabled={
+                  !senderSignature || !receiverSignature || signatureSubmitting
+                }
+              >
+                {signatureSubmitting ? (
+                  <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                ) : (
+                  <PackageCheck className='mr-2 h-4 w-4' />
+                )}
+                Confirm Collection
+              </Button>
+            </SheetFooter>
           </div>
+        </SheetContent>
+      </Sheet>
 
-          <DialogFooter>
-            <Button
-              variant='outline'
-              onClick={() => setSignatureDialogOpen(false)}
-              disabled={signatureSubmitting}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSignatureSubmit}
-              disabled={
-                !senderSignature || !receiverSignature || signatureSubmitting
-              }
-            >
-              {signatureSubmitting ? (
-                <Loader2 className='mr-2 h-4 w-4 animate-spin' />
-              ) : (
-                <PackageCheck className='mr-2 h-4 w-4' />
-              )}
-              Confirm Collection
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* View Signatures Sheet */}
+      <Sheet open={viewSignaturesOpen} onOpenChange={setViewSignaturesOpen}>
+        <SheetContent
+          side='right'
+          className='w-full sm:max-w-full inset-y-0 border-l-0 p-0'
+        >
+          <div className='flex flex-col h-full'>
+            <SheetHeader className='border-b px-6 py-4'>
+              <SheetTitle className='flex items-center gap-2 text-lg'>
+                <PenLine className='h-5 w-5' />
+                Signatures — #{viewSignaturesOrder?.orderNumber}
+              </SheetTitle>
+              <SheetDescription>
+                {viewSignaturesOrder?.signedAt
+                  ? `Signed on ${new Date(
+                      viewSignaturesOrder.signedAt
+                    ).toLocaleDateString("en-AU", {
+                      weekday: "long",
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric",
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })}`
+                  : "No signatures recorded for this order."}
+              </SheetDescription>
+            </SheetHeader>
 
-      {/* View Signatures Dialog */}
-      <Dialog open={viewSignaturesOpen} onOpenChange={setViewSignaturesOpen}>
-        <DialogContent className='sm:max-w-xl'>
-          <DialogHeader>
-            <DialogTitle className='flex items-center gap-2'>
-              <PenLine className='h-5 w-5' />
-              Signatures — #{viewSignaturesOrder?.orderNumber}
-            </DialogTitle>
-            <DialogDescription>
-              {viewSignaturesOrder?.signedAt
-                ? `Signed on ${new Date(
-                    viewSignaturesOrder.signedAt
-                  ).toLocaleDateString("en-AU", {
-                    weekday: "long",
-                    day: "numeric",
-                    month: "long",
-                    year: "numeric",
-                    hour: "numeric",
-                    minute: "2-digit",
-                  })}`
-                : "No signatures recorded for this order."}
-            </DialogDescription>
-          </DialogHeader>
-
-          {viewSignaturesOrder?.senderSignature &&
-          viewSignaturesOrder?.receiverSignature ? (
-            <div className='space-y-6 py-2'>
-              <div>
-                <p className='text-sm text-muted-foreground mb-2'>
-                  Sender (Warehouse Staff)
-                </p>
-                <div className='border rounded-md bg-white overflow-hidden'>
-                  <img
-                    src={viewSignaturesOrder.senderSignature}
-                    alt='Sender signature'
-                    className='w-full h-[140px] object-contain'
-                  />
-                </div>
-              </div>
-              <Separator />
-              <div>
-                <p className='text-sm text-muted-foreground mb-2'>
-                  Receiver (Customer)
-                </p>
-                <div className='border rounded-md bg-white overflow-hidden'>
-                  <img
-                    src={viewSignaturesOrder.receiverSignature}
-                    alt='Receiver signature'
-                    className='w-full h-[140px] object-contain'
-                  />
-                </div>
+            <div className='flex-1 overflow-y-auto px-6 py-6'>
+              <div className='max-w-2xl mx-auto'>
+                {viewSignaturesOrder?.senderSignature &&
+                viewSignaturesOrder?.receiverSignature ? (
+                  <div className='space-y-8'>
+                    <div>
+                      <p className='text-sm font-medium text-muted-foreground mb-2'>
+                        Sender (Warehouse Staff)
+                      </p>
+                      <div className='relative border rounded-md bg-white overflow-hidden h-[200px]'>
+                        <Image
+                          src={viewSignaturesOrder.senderSignature}
+                          alt='Sender signature'
+                          fill
+                          className='object-contain'
+                          sizes='100vw'
+                        />
+                      </div>
+                    </div>
+                    <Separator />
+                    <div>
+                      <p className='text-sm font-medium text-muted-foreground mb-2'>
+                        Receiver (Customer)
+                      </p>
+                      <div className='relative border rounded-md bg-white overflow-hidden h-[200px]'>
+                        <Image
+                          src={viewSignaturesOrder.receiverSignature}
+                          alt='Receiver signature'
+                          fill
+                          className='object-contain'
+                          sizes='100vw'
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className='py-16 text-center text-muted-foreground'>
+                    <PenLine className='h-10 w-10 mx-auto mb-3 opacity-50' />
+                    <p>No signatures were captured for this order.</p>
+                  </div>
+                )}
               </div>
             </div>
-          ) : (
-            <div className='py-8 text-center text-muted-foreground'>
-              <PenLine className='h-8 w-8 mx-auto mb-2 opacity-50' />
-              <p>No signatures were captured for this order.</p>
-            </div>
-          )}
 
-          <DialogFooter>
-            <Button
-              variant='outline'
-              onClick={() => setViewSignaturesOpen(false)}
-            >
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <SheetFooter className='border-t px-6 py-4 flex-row justify-end'>
+              <Button
+                variant='outline'
+                onClick={() => setViewSignaturesOpen(false)}
+              >
+                Close
+              </Button>
+            </SheetFooter>
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

@@ -11,6 +11,7 @@ import { revalidatePath } from "next/cache";
 
 // Types for cart items from client
 interface ClientCartItem {
+  cartItemId?: string;
   productId: string;
   partNumber: string;
   productName: string;
@@ -24,6 +25,7 @@ interface ClientCartItem {
   holdingFeeInCents?: number;
   bulkDiscounts?: { minQuantity: number; discountPercent: number }[];
   appliedDiscountPercent?: number;
+  cuttingSpec?: { cutType: string; xCutMm: number; yCutMm: number };
 }
 
 // Auth helper
@@ -54,6 +56,7 @@ export async function syncCart(clientItems: ClientCartItem[]) {
       const itemsToInsert = clientItems.map((item) => ({
         userId,
         productId: item.productId,
+        cartItemId: item.cartItemId || item.productId,
         partNumber: item.partNumber,
         productName: item.productName,
         color: item.color,
@@ -66,6 +69,9 @@ export async function syncCart(clientItems: ClientCartItem[]) {
         appliedDiscountPercent: item.appliedDiscountPercent || 0,
         bulkDiscounts: item.bulkDiscounts
           ? JSON.stringify(item.bulkDiscounts)
+          : null,
+        cuttingSpec: item.cuttingSpec
+          ? JSON.stringify(item.cuttingSpec)
           : null,
         quantity: item.quantity,
       }));
@@ -95,7 +101,9 @@ export async function getUserCart() {
 
   return items.map((item) => ({
     ...item,
+    cartItemId: item.cartItemId || item.productId,
     bulkDiscounts: item.bulkDiscounts ? JSON.parse(item.bulkDiscounts) : [],
+    cuttingSpec: item.cuttingSpec ? JSON.parse(item.cuttingSpec) : undefined,
   }));
 }
 

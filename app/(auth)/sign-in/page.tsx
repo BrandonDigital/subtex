@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
-import { AuthForm } from "@/components/auth-form";
+import { AuthForm } from "../auth-form";
 
 const productionUrls = ["https://subtex.com.au", "https://www.subtex.com.au"];
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
-const isDevSite = appUrl !== "" && !productionUrls.includes(appUrl);
+const isLocalhost = appUrl.includes("localhost") || appUrl.includes("127.0.0.1");
+const isDevSite = appUrl !== "" && !productionUrls.includes(appUrl) && !isLocalhost;
 
 export const metadata: Metadata = {
   title: "Sign In",

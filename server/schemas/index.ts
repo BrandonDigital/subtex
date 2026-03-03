@@ -1,3 +1,6 @@
+// Companies
+export * from "./companies";
+
 // Users and authentication
 export * from "./users";
 
@@ -24,3 +27,6 @@ export * from "./announcements";
 
 // Discount codes
 export * from "./discount-codes";
+
+// Settings
+export * from "./settings";

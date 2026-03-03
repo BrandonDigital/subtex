@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef } from "react";
+import Image from "next/image";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -181,20 +182,23 @@ export function MediaGrid({
                     ? "border-primary ring-2 ring-primary ring-offset-2"
                     : "border-transparent hover:border-muted-foreground/50",
                 )}
+                role="button"
+                tabIndex={0}
                 onClick={(e) => handleAssetClick(asset, index, e)}
                 onDoubleClick={() => handleDoubleClick(asset)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleAssetClick(asset, index, e as unknown as React.MouseEvent); } }}
               >
                 {/* Image */}
                 <div className='absolute inset-0 bg-muted'>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
+                  <Image
                     src={asset.secure_url.replace(
                       "/upload/",
                       "/upload/c_fill,w_300,h_300,f_auto,q_auto/",
                     )}
                     alt={asset.filename}
-                    className='w-full h-full object-cover'
-                    loading='lazy'
+                    fill
+                    className='object-cover'
+                    sizes='(max-width: 768px) 33vw, 200px'
                   />
                 </div>
 
@@ -204,7 +208,10 @@ export function MediaGrid({
                     "absolute top-2 left-2 z-10 transition-opacity",
                     isSelected || "opacity-0 group-hover:opacity-100",
                   )}
+                  role="button"
+                  tabIndex={0}
                   onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); } }}
                 >
                   <Checkbox
                     checked={isSelected}

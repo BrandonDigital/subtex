@@ -1,8 +1,12 @@
 import type { Metadata } from "next";
-import { Hero } from "@/components/hero";
+import Script from "next/script";
+import { Hero } from "./_components/hero";
+import { BentoGrid } from "./_components/bento-grid";
 import { ProductConfiguratorWrapper } from "@/components/product-configurator-wrapper";
-import { AcmInfoSection } from "@/components/acm-info-section";
-import { FaqSection } from "@/components/faq-section";
+import { AcmInfoSection } from "./_components/acm-info-section";
+import { FaqSection } from "./_components/faq-section";
+import { ServicesSection } from "./_components/services-section";
+import { FeaturesApplicationsSection } from "./_components/features-applications-section";
 import { PromoScrollSentinel } from "@/components/promo-dialog";
 import { getAcmProducts } from "@/server/actions/products";
 import { siteConfig, seoContent, acmFAQs, generateFAQSchema } from "@/lib/seo";
@@ -30,11 +34,12 @@ export const metadata: Metadata = {
   },
 };
 
-// JSON-LD Component
-function JsonLd({ data }: { data: object }) {
+function JsonLd({ id, data }: { id: string; data: object }) {
   return (
-    <script
+    <Script
+      id={id}
       type='application/ld+json'
+      strategy='afterInteractive'
       dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
     />
   );
@@ -70,9 +75,9 @@ export default async function HomePage() {
   const productSchema = {
     "@context": "https://schema.org",
     "@type": "Product",
-    name: "ACM Sheets - Aluminium Composite Panels",
+    name: "ACM Sheets - Wholesale Aluminium Composite Panels Perth",
     description:
-      "Premium aluminium composite material (ACM) sheets for signage, trailer alignment, caravan panels, and kitchen splashboards. Available in white and black, gloss and matte finishes. Note: PE core ACM is not fireproof and not suitable for building cladding.",
+      "Perth's best price quality ACM sheets at wholesale prices. Premium aluminium composite panels for signage, trailers, caravans, and splashbacks. Cut-to-size service and local delivery available. White and black, gloss and matte finishes. Note: PE core ACM is not fireproof and not suitable for building cladding.",
     image: `${siteConfig.url}/Subtex_ACM_Stack.png`,
     brand: {
       "@type": "Brand",
@@ -120,28 +125,40 @@ export default async function HomePage() {
   return (
     <>
       {/* Structured Data for SEO */}
-      <JsonLd data={faqSchema} />
-      <JsonLd data={productSchema} />
+      <JsonLd id='schema-homepage-faq' data={faqSchema} />
+      <JsonLd id='schema-homepage-product' data={productSchema} />
 
-      <Hero />
+      <ProductConfiguratorWrapper acmProducts={acmProducts} />
+
+      <div className="w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
+        <h2 className="text-7xl font-black tracking-tighter uppercase leading-[0.85]">
+          More Info.
+        </h2>
+      </div>
+
+      <BentoGrid />
 
       {/* Promo scroll trigger - fires when user scrolls past this point */}
       <PromoScrollSentinel />
 
       {/* SEO-friendly heading structure */}
       <section className='sr-only'>
-        <h1>ACM Sheets Perth - Aluminium Composite Panels Supplier</h1>
+        <h1>Perth&apos;s Best Price Quality ACM Sheets - Wholesale Aluminium Composite Panels</h1>
         <p>
-          Subtex is Perth&apos;s trusted local supplier of premium ACM
-          (Aluminium Composite Material) sheets. We offer high-quality aluminium
-          composite panels for signage, trailer alignment, caravan panels, and
-          kitchen splashboards across Western Australia. Available in white and
-          black colours with gloss and matte finishes. Note: Our ACM sheets are
-          not fireproof and cannot be used as building cladding.
+          Subtex is Perth&apos;s best-priced quality ACM wholesaler, offering
+          premium aluminium composite panels at unbeatable wholesale prices.
+          We supply ACM sheets for signage, trailers, caravans, and kitchen
+          splashbacks across Western Australia. Available in white and black
+          colours with gloss and matte finishes. Custom cut-to-size service
+          and local delivery available. Bulk discounts on larger orders. Note:
+          Our ACM sheets are not fireproof and cannot be used as building cladding.
         </p>
       </section>
 
-      <ProductConfiguratorWrapper acmProducts={acmProducts} />
+
+      <FeaturesApplicationsSection />
+
+      <ServicesSection />
 
       <AcmInfoSection />
 

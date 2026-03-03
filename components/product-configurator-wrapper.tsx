@@ -1,7 +1,7 @@
 "use client";
 
 import { ProductConfigurator } from "@/components/product-configurator";
-import { useCart } from "@/hooks/use-cart";
+import { useCart, type CuttingSpec } from "@/hooks/use-cart";
 import { subscribeToStockAlert } from "@/server/actions/products";
 import { toast } from "@/components/ui/toast";
 
@@ -35,7 +35,7 @@ export function ProductConfiguratorWrapper({
 }: ProductConfiguratorWrapperProps) {
   const { addItem } = useCart();
 
-  const handleAddToCart = (productId: string, quantity: number) => {
+  const handleAddToCart = (productId: string, quantity: number, cuttingSpec?: CuttingSpec) => {
     const product = acmProducts.find((p) => p.id === productId);
     if (!product) return;
 
@@ -51,6 +51,7 @@ export function ProductConfiguratorWrapper({
       bulkDiscounts: product.bulkDiscounts,
       imageUrl: product.imageUrl || undefined,
       stock: product.stock,
+      cuttingSpec,
     });
   };
 

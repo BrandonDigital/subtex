@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -173,11 +174,14 @@ export function UploadZone({
           ${isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/25"}
           ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:border-muted-foreground/50"}
         `}
+        role="button"
+        tabIndex={0}
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
         onClick={() => !disabled && fileInputRef.current?.click()}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (!disabled) fileInputRef.current?.click(); } }}
       >
         <input
           ref={fileInputRef}
@@ -244,11 +248,12 @@ export function UploadZone({
           <div className="space-y-4">
             {capturedImage ? (
               <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <Image
                   src={capturedImage}
                   alt="Captured"
-                  className="w-full h-full object-contain"
+                  fill
+                  className="object-contain"
+                  sizes="(max-width: 768px) 100vw, 50vw"
                 />
               </div>
             ) : (

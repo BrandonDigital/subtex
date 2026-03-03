@@ -4,13 +4,15 @@ import type { Metadata } from "next";
 
 export const siteConfig = {
   name: "Subtex",
-  description: "Perth's local supplier of premium ACM sheets for signage, trailer alignment, caravan panels, and kitchen splashboards. Quality aluminium composite panels with local delivery across Perth, Western Australia. Note: Not fireproof, not for building cladding.",
+  description: "Perth's best price for quality ACM sheets. Premium aluminium composite panels at wholesale prices for signage, trailers, caravans, and splashbacks. Cut-to-size service and local delivery across Perth, WA. Note: Not fireproof, not for building cladding.",
   url: process.env.NEXT_PUBLIC_APP_URL || "https://subtex.com.au",
   ogImage: "/og-image.jpg",
   creator: "Subtex",
   keywords: [
     // Primary Keywords (High Intent)
     "ACM sheets Perth",
+    "cheap ACM sheets Perth",
+    "ACM wholesale Perth",
     "aluminium composite panels Perth",
     "ACM panels WA",
     "aluminium composite material Perth",
@@ -37,9 +39,12 @@ export const siteConfig = {
     
     // Long-tail Keywords
     "where to buy ACM sheets in Perth",
+    "best price ACM sheets in Perth",
     "ACM sheets for outdoor signage",
     "aluminium composite panels wholesale Perth",
+    "ACM wholesaler Western Australia",
     "ACM sheets bulk discount",
+    "ACM cut to size Perth",
     "signage substrate Perth",
     "aluminium sandwich panel Perth",
     
@@ -57,7 +62,7 @@ export const siteConfig = {
     name: "Subtex",
     legalName: "Subtex Pty Ltd",
     address: {
-      street: "16 Brewer Rd",
+      street: "14B Brewer Rd",
       suburb: "Canning Vale",
       city: "Perth",
       state: "WA",
@@ -330,14 +335,17 @@ export function generateWebPageSchema({
 
 export const seoContent = {
   homepage: {
-    title: "ACM Sheets Perth | Aluminium Composite Panels | Subtex",
-    description: "Perth's trusted supplier of premium ACM sheets for signage, trailer alignment, caravan panels & kitchen splashboards. White & black, gloss & matte finishes. Local delivery across Perth, WA. Note: Not for building cladding.",
-    h1: "Perth Local ACM Sheets",
+    title: "Perth's Best Price Quality ACM Sheets | Wholesale Aluminium Composite Panels | Subtex",
+    description: "Perth's best price for quality ACM sheets. Premium aluminium composite panels at wholesale prices with cut-to-size service & local delivery. White & black, gloss & matte finishes. Bulk discounts available.",
+    h1: "Perth's Best Price Quality ACM Sheets",
     keywords: [
       "ACM sheets Perth",
+      "cheap ACM sheets Perth",
+      "ACM wholesale Perth",
       "aluminium composite panels Perth",
       "signage materials Perth",
       "ACM supplier Western Australia",
+      "ACM cut to size Perth",
       "ACM trailer signage",
       "caravan ACM panels",
       "kitchen splashboard ACM",
@@ -383,6 +391,17 @@ export const seoContent = {
     keywords: [
       "ACM supplier privacy policy",
       "Subtex data protection",
+    ],
+  },
+  services: {
+    title: "ACM Sheet Cutting Service Perth | Custom Cut-to-Size | Subtex",
+    description: "Professional ACM sheet cutting service in Perth. Get aluminium composite panels cut to your exact dimensions — precision cuts, reduced waste, and ready-to-use panels for pickup or delivery.",
+    keywords: [
+      "ACM cutting service Perth",
+      "ACM cut to size Perth",
+      "custom ACM panels Perth",
+      "aluminium composite cutting WA",
+      "ACM sheet fabrication Perth",
     ],
   },
 };

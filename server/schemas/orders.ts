@@ -57,6 +57,7 @@ export const orders = pgTable("orders", {
   discountCodeId: uuid("discount_code_id").references(() => discountCodes.id),
   discountCodeSnapshot: varchar("discount_code_snapshot", { length: 50 }), // Code string at time of order
   deliveryFeeInCents: integer("delivery_fee_in_cents").default(0).notNull(),
+  cuttingFeeInCents: integer("cutting_fee_in_cents").default(0).notNull(),
   holdingFeeInCents: integer("holding_fee_in_cents").default(0).notNull(), // For click & collect
   totalInCents: integer("total_in_cents").notNull(),
 
@@ -93,6 +94,9 @@ export const orders = pgTable("orders", {
   // Email tracking
   confirmationEmailSentAt: timestamp("confirmation_email_sent_at"),
 
+  // Complete order snapshot (JSON) — preserves all pricing, items, and fees at time of purchase
+  orderSnapshot: text("order_snapshot"),
+
   // Notes
   customerNotes: text("customer_notes"),
   adminNotes: text("admin_notes"),
@@ -121,6 +125,11 @@ export const orderItems = pgTable("order_items", {
   unitPriceInCents: integer("unit_price_in_cents").notNull(), // Price per item at order time
   discountPercent: integer("discount_percent").default(0).notNull(), // Bulk discount applied
   totalInCents: integer("total_in_cents").notNull(), // quantity * unitPrice * (1 - discount)
+  refundedQuantity: integer("refunded_quantity").default(0).notNull(),
+  collectedQuantity: integer("collected_quantity").default(0).notNull(),
+
+  // CNC Cutting specification (JSON: { cutType, xCutMm, yCutMm })
+  cuttingSpec: text("cutting_spec"),
 
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -163,6 +172,20 @@ export const refundRequests = pgTable("refund_requests", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// Individual items within a refund request
+export const refundRequestItems = pgTable("refund_request_items", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  refundRequestId: uuid("refund_request_id")
+    .notNull()
+    .references(() => refundRequests.id, { onDelete: "cascade" }),
+  orderItemId: uuid("order_item_id")
+    .notNull()
+    .references(() => orderItems.id),
+  quantity: integer("quantity").notNull(),
+  amountInCents: integer("amount_in_cents").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // Relations
 export const ordersRelations = relations(orders, ({ one, many }) => ({
   user: one(users, {
@@ -182,7 +205,7 @@ export const ordersRelations = relations(orders, ({ one, many }) => ({
   refundRequests: many(refundRequests),
 }));
 
-export const orderItemsRelations = relations(orderItems, ({ one }) => ({
+export const orderItemsRelations = relations(orderItems, ({ one, many }) => ({
   order: one(orders, {
     fields: [orderItems.orderId],
     references: [orders.id],
@@ -191,6 +214,7 @@ export const orderItemsRelations = relations(orderItems, ({ one }) => ({
     fields: [orderItems.productId],
     references: [products.id],
   }),
+  refundRequestItems: many(refundRequestItems),
 }));
 
 export const orderStatusHistoryRelations = relations(
@@ -207,20 +231,38 @@ export const orderStatusHistoryRelations = relations(
   })
 );
 
-export const refundRequestsRelations = relations(refundRequests, ({ one }) => ({
-  order: one(orders, {
-    fields: [refundRequests.orderId],
-    references: [orders.id],
-  }),
-  user: one(users, {
-    fields: [refundRequests.userId],
-    references: [users.id],
-  }),
-  processedByUser: one(users, {
-    fields: [refundRequests.processedBy],
-    references: [users.id],
-  }),
-}));
+export const refundRequestsRelations = relations(
+  refundRequests,
+  ({ one, many }) => ({
+    order: one(orders, {
+      fields: [refundRequests.orderId],
+      references: [orders.id],
+    }),
+    user: one(users, {
+      fields: [refundRequests.userId],
+      references: [users.id],
+    }),
+    processedByUser: one(users, {
+      fields: [refundRequests.processedBy],
+      references: [users.id],
+    }),
+    items: many(refundRequestItems),
+  })
+);
+
+export const refundRequestItemsRelations = relations(
+  refundRequestItems,
+  ({ one }) => ({
+    refundRequest: one(refundRequests, {
+      fields: [refundRequestItems.refundRequestId],
+      references: [refundRequests.id],
+    }),
+    orderItem: one(orderItems, {
+      fields: [refundRequestItems.orderItemId],
+      references: [orderItems.id],
+    }),
+  })
+);
 
 // Types
 export type Order = typeof orders.$inferSelect;
@@ -230,3 +272,5 @@ export type NewOrderItem = typeof orderItems.$inferInsert;
 export type OrderStatusHistory = typeof orderStatusHistory.$inferSelect;
 export type RefundRequest = typeof refundRequests.$inferSelect;
 export type NewRefundRequest = typeof refundRequests.$inferInsert;
+export type RefundRequestItem = typeof refundRequestItems.$inferSelect;
+export type NewRefundRequestItem = typeof refundRequestItems.$inferInsert;

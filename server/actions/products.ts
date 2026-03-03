@@ -1,8 +1,9 @@
 "use server";
 
 import { db } from "../db";
-import { products, bulkDiscounts } from "../schemas/products";
-import { eq, asc, desc, and, or } from "drizzle-orm";
+import { products, bulkDiscounts, reservations } from "../schemas/products";
+import { orders, orderItems } from "../schemas/orders";
+import { eq, asc, desc, and, or, gt, sql, inArray, ne } from "drizzle-orm";
 import {
   getAllProducts,
   getBulkDiscountsForProduct,
@@ -109,5 +110,80 @@ export async function getProductsWithoutStock() {
   return db.query.products.findMany({
     where: and(eq(products.active, true), eq(products.stock, 0)),
     orderBy: desc(products.createdAt),
+  });
+}
+
+// Get inventory breakdown with reserved and sold quantities per product
+export async function getInventoryBreakdown() {
+  // Get all active products
+  const allProducts = await db.query.products.findMany({
+    where: and(eq(products.active, true), eq(products.status, "active")),
+    orderBy: [asc(products.name)],
+  });
+
+  if (allProducts.length === 0) {
+    return [];
+  }
+
+  const productIds = allProducts.map((p) => p.id);
+  const now = new Date();
+
+  // Get active reservations per product
+  const activeReservations = await db
+    .select({
+      productId: reservations.productId,
+      totalReserved: sql<number>`COALESCE(SUM(${reservations.quantity}), 0)`,
+    })
+    .from(reservations)
+    .where(
+      and(
+        inArray(reservations.productId, productIds),
+        eq(reservations.status, "active"),
+        gt(reservations.expiresAt, now)
+      )
+    )
+    .groupBy(reservations.productId);
+
+  const reservedMap = new Map(
+    activeReservations.map((r) => [r.productId, Number(r.totalReserved)])
+  );
+
+  // Get sold quantities per product (from paid/processing/shipped/delivered/collected orders — not cancelled/refunded)
+  const soldQuantities = await db
+    .select({
+      productId: orderItems.productId,
+      totalSold: sql<number>`COALESCE(SUM(${orderItems.quantity}), 0)`,
+    })
+    .from(orderItems)
+    .innerJoin(orders, eq(orderItems.orderId, orders.id))
+    .where(
+      and(
+        inArray(orderItems.productId, productIds),
+        inArray(orders.status, [
+          "paid",
+          "processing",
+          "shipped",
+          "delivered",
+          "collected",
+        ] as any)
+      )
+    )
+    .groupBy(orderItems.productId);
+
+  const soldMap = new Map(
+    soldQuantities.map((s) => [s.productId, Number(s.totalSold)])
+  );
+
+  return allProducts.map((product) => {
+    const reserved = reservedMap.get(product.id) || 0;
+    const sold = soldMap.get(product.id) || 0;
+    const available = Math.max(0, product.stock - reserved);
+
+    return {
+      ...product,
+      reserved,
+      sold,
+      available,
+    };
   });
 }

@@ -9,7 +9,7 @@ import {
   useRef,
   ReactNode,
 } from "react";
-import { authClient } from "@/lib/auth-client";
+import { authClient } from "@/lib/clients/auth-client";
 import { toast } from "@/components/ui/toast";
 import { syncCart, getUserCart } from "@/server/actions/cart";
 
@@ -18,7 +18,14 @@ export interface BulkDiscount {
   discountPercent: number;
 }
 
+export interface CuttingSpec {
+  cutType: "horizontal" | "vertical" | "both";
+  xCutMm: number; // Horizontal cut position (mm from top edge)
+  yCutMm: number; // Vertical cut position (mm from left edge)
+}
+
 export interface CartItem {
+  cartItemId: string; // Unique identifier for this cart entry
   productId: string;
   partNumber: string;
   productName: string;
@@ -33,13 +40,14 @@ export interface CartItem {
   bulkDiscounts?: BulkDiscount[];
   appliedDiscountPercent?: number; // Currently applied discount percentage
   stock?: number; // Available stock quantity for backorder notifications
+  cuttingSpec?: CuttingSpec; // Optional CNC cutting specification
 }
 
 interface CartContextType {
   items: CartItem[];
-  addItem: (item: Omit<CartItem, "quantity"> & { quantity?: number }) => void;
-  removeItem: (productId: string) => void;
-  updateQuantity: (productId: string, quantity: number) => void;
+  addItem: (item: Omit<CartItem, "quantity" | "cartItemId"> & { quantity?: number; cartItemId?: string }) => void;
+  removeItem: (cartItemId: string) => void;
+  updateQuantity: (cartItemId: string, quantity: number) => void;
   clearCart: () => void;
   clearCartForSignOut: () => void;
   totalItems: number;
@@ -96,6 +104,35 @@ function calculateDiscountedPrice(
   return Math.round(basePriceInCents * (1 - discountPercent / 100));
 }
 
+// Recalculate bulk discounts for ALL items based on total quantity per product.
+// This ensures items with cutting specs share the same discount tier as uncut
+// entries of the same product.
+function recalculateAllDiscounts(items: CartItem[]): CartItem[] {
+  // Sum quantities by productId
+  const productTotals = new Map<string, number>();
+  for (const item of items) {
+    productTotals.set(
+      item.productId,
+      (productTotals.get(item.productId) || 0) + item.quantity
+    );
+  }
+
+  return items.map((item) => {
+    const totalQty = productTotals.get(item.productId) || item.quantity;
+    const { discountPercent } = getApplicableDiscount(
+      totalQty,
+      item.bulkDiscounts
+    );
+    const basePrice = item.basePriceInCents || item.priceInCents;
+    return {
+      ...item,
+      basePriceInCents: basePrice,
+      priceInCents: calculateDiscountedPrice(basePrice, discountPercent),
+      appliedDiscountPercent: discountPercent,
+    };
+  });
+}
+
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
@@ -129,6 +166,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
         const migratedItems = parsedItems.map(
           (item: Record<string, unknown>) => ({
             ...item,
+            // Ensure cartItemId exists (fallback to productId for old items)
+            cartItemId: item.cartItemId || item.productId || item.variantId,
             // Migrate variantId to productId if needed
             productId: item.productId || item.variantId,
             // Migrate sku to partNumber if needed
@@ -165,6 +204,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
           if (serverCart && serverCart.length > 0) {
             // Convert server cart items to client format
             const clientItems: CartItem[] = serverCart.map((item) => ({
+              cartItemId: item.cartItemId || item.productId,
               productId: item.productId,
               partNumber: item.partNumber || "",
               productName: item.productName,
@@ -178,6 +218,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
               holdingFeeInCents: item.holdingFeeInCents || undefined,
               bulkDiscounts: item.bulkDiscounts || undefined,
               appliedDiscountPercent: item.appliedDiscountPercent || undefined,
+              cuttingSpec: item.cuttingSpec || undefined,
             }));
             setItems(clientItems);
             localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(clientItems));
@@ -209,107 +250,100 @@ export function CartProvider({ children }: { children: ReactNode }) {
     (
       newItem: Omit<
         CartItem,
-        "quantity" | "basePriceInCents" | "appliedDiscountPercent"
-      > & { quantity?: number; basePriceInCents?: number }
+        "quantity" | "basePriceInCents" | "appliedDiscountPercent" | "cartItemId"
+      > & { quantity?: number; basePriceInCents?: number; cartItemId?: string }
     ) => {
       const quantity = newItem.quantity || 1;
       // Use basePriceInCents if provided, otherwise use priceInCents as the base
       const basePriceInCents = newItem.basePriceInCents || newItem.priceInCents;
 
-      // Check if item exists before updating state
-      const existingItem = items.find(
-        (item) => item.productId === newItem.productId
-      );
+      // Match existing items by productId AND cuttingSpec
+      const existingItem = items.find((item) => {
+        if (item.productId !== newItem.productId) return false;
+        // Both have no cutting — merge
+        if (!item.cuttingSpec && !newItem.cuttingSpec) return true;
+        // One has cutting, the other doesn't — don't merge
+        if (!item.cuttingSpec || !newItem.cuttingSpec) return false;
+        // Both have cutting — compare specs
+        return (
+          item.cuttingSpec.cutType === newItem.cuttingSpec.cutType &&
+          item.cuttingSpec.xCutMm === newItem.cuttingSpec.xCutMm &&
+          item.cuttingSpec.yCutMm === newItem.cuttingSpec.yCutMm
+        );
+      });
 
       if (existingItem) {
-        // Update existing item - recalculate discount for new total quantity
+        // Update existing item quantity, then recalculate discounts for all items
+        // of this product (cut + uncut share the same discount tier)
         const newQuantity = existingItem.quantity + quantity;
-        const { discountPercent } = getApplicableDiscount(
-          newQuantity,
-          existingItem.bulkDiscounts
-        );
-        const discountedPrice = calculateDiscountedPrice(
-          existingItem.basePriceInCents,
-          discountPercent
-        );
 
         setItems((prev) =>
-          prev.map((item) =>
-            item.productId === newItem.productId
-              ? {
-                  ...item,
-                  quantity: newQuantity,
-                  priceInCents: discountedPrice,
-                  appliedDiscountPercent: discountPercent,
-                }
-              : item
+          recalculateAllDiscounts(
+            prev.map((item) =>
+              item.cartItemId === existingItem.cartItemId
+                ? { ...item, quantity: newQuantity }
+                : item
+            )
           )
         );
         toast.success(`Updated quantity in cart`);
       } else {
-        // Add new item - calculate initial discount
-        const { discountPercent } = getApplicableDiscount(
-          quantity,
-          newItem.bulkDiscounts
-        );
-        const discountedPrice = calculateDiscountedPrice(
-          basePriceInCents,
-          discountPercent
-        );
+        // Generate cartItemId: use productId for non-cut items, unique ID for cut items
+        const cartItemId = newItem.cuttingSpec
+          ? `${newItem.productId}__cut_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+          : newItem.cartItemId || newItem.productId;
 
-        setItems((prev) => [
-          ...prev,
-          {
-            ...newItem,
-            quantity,
-            basePriceInCents,
-            priceInCents: discountedPrice,
-            appliedDiscountPercent: discountPercent,
-          },
-        ]);
+        // Add new item, then recalculate discounts for all items of this product
+        setItems((prev) =>
+          recalculateAllDiscounts([
+            ...prev,
+            {
+              ...newItem,
+              cartItemId,
+              quantity,
+              basePriceInCents,
+              priceInCents: basePriceInCents, // Will be recalculated
+              appliedDiscountPercent: 0,
+            },
+          ])
+        );
         toast.success(`Added to cart`);
       }
     },
     [items]
   );
 
-  const removeItem = useCallback((productId: string) => {
-    setItems((prev) => prev.filter((item) => item.productId !== productId));
+  const removeItem = useCallback((cartItemId: string) => {
+    setItems((prev) =>
+      recalculateAllDiscounts(
+        prev.filter(
+          (item) => (item.cartItemId || item.productId) !== cartItemId
+        )
+      )
+    );
     toast.success("Removed from cart");
   }, []);
 
-  const updateQuantity = useCallback((productId: string, quantity: number) => {
+  const updateQuantity = useCallback((cartItemId: string, quantity: number) => {
     if (quantity <= 0) {
-      setItems((prev) => prev.filter((item) => item.productId !== productId));
+      setItems((prev) =>
+        recalculateAllDiscounts(
+          prev.filter(
+            (item) => (item.cartItemId || item.productId) !== cartItemId
+          )
+        )
+      );
       toast.success("Removed from cart");
       return;
     }
 
     setItems((prev) =>
-      prev.map((item) => {
-        if (item.productId !== productId) return item;
-
-        // Use basePriceInCents, fallback to priceInCents for old items
-        const basePrice = item.basePriceInCents || item.priceInCents;
-
-        // Recalculate discount for new quantity
-        const { discountPercent } = getApplicableDiscount(
-          quantity,
-          item.bulkDiscounts
-        );
-        const discountedPrice = calculateDiscountedPrice(
-          basePrice,
-          discountPercent
-        );
-
-        return {
-          ...item,
-          quantity,
-          basePriceInCents: basePrice,
-          priceInCents: discountedPrice,
-          appliedDiscountPercent: discountPercent,
-        };
-      })
+      recalculateAllDiscounts(
+        prev.map((item) => {
+          if ((item.cartItemId || item.productId) !== cartItemId) return item;
+          return { ...item, quantity };
+        })
+      )
     );
   }, []);
 

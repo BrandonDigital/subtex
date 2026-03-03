@@ -14,10 +14,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { NotificationPreferencesForm } from "@/components/notification-preferences-form";
-import { ProfileForm } from "@/components/profile-form";
-import { PasskeyManagement } from "@/components/passkey-management";
-import { AddressBook } from "@/components/address-book";
+import { NotificationPreferencesForm } from "./notification-preferences-form";
+import { ProfileForm } from "./profile-form";
+import { PasskeyManagement } from "./passkey-management";
+import { AddressBook } from "./address-book";
 import { auth } from "@/server/auth";
 import { db } from "@/server/db";
 import { users, addresses as addressesTable, passkeys } from "@/server/schemas";
@@ -66,7 +66,7 @@ export default async function AccountPage() {
 
   return (
     <div className='py-12'>
-      <div className='container mx-auto px-4'>
+      <div className='w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8'>
         <div className='max-w-4xl mx-auto'>
           <h1 className='text-3xl font-bold mb-8'>Account Settings</h1>
 

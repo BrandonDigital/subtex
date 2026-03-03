@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import { UsersTable } from "./users-table";
 import { UserEditPanel } from "./user-edit-panel";
 import { type UserWithOrderCount } from "@/server/actions/users";
+import { type CompanyWithMemberCount } from "@/server/actions/companies";
 
 interface UsersPageClientProps {
   users: UserWithOrderCount[];
@@ -13,12 +14,14 @@ interface UsersPageClientProps {
     adminCount: number;
     userCount: number;
   };
+  companies: CompanyWithMemberCount[];
 }
 
 export function UsersPageClient({
   users,
   currentUserId,
   stats,
+  companies,
 }: UsersPageClientProps) {
   const [showEditPanel, setShowEditPanel] = useState(false);
   const [editUser, setEditUser] = useState<UserWithOrderCount | null>(null);
@@ -42,12 +45,12 @@ export function UsersPageClient({
         onEditUser={handleOpenEdit}
       />
 
-      {/* Edit User Panel Overlay */}
       <UserEditPanel
         isOpen={showEditPanel}
         onClose={handleCloseEdit}
         user={editUser}
         currentUserId={currentUserId}
+        companies={companies}
       />
     </>
   );

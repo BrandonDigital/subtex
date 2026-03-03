@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { Truck, MapPin, Package, Clock, AlertCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -68,11 +69,12 @@ const deliveryOptions = [
   },
 ];
 
-// JSON-LD Component
-function JsonLd({ data }: { data: object }) {
+function JsonLd({ id, data }: { id: string; data: object }) {
   return (
-    <script
+    <Script
+      id={id}
       type="application/ld+json"
+      strategy="afterInteractive"
       dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
     />
   );
@@ -86,11 +88,11 @@ export default function ShippingPage() {
 
   return (
     <>
-      <JsonLd data={breadcrumbSchema} />
+      <JsonLd id="schema-shipping" data={breadcrumbSchema} />
 
       {/* Page Header */}
       <div className="bg-zinc-50 border-b">
-        <div className="container mx-auto px-4 py-16 sm:py-20">
+        <div className="w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20">
           <div className="max-w-3xl mx-auto text-center">
             <h1 className="text-4xl sm:text-5xl font-semibold text-zinc-900 mb-4 tracking-tight">
               Shipping & Delivery
@@ -105,7 +107,7 @@ export default function ShippingPage() {
 
       {/* Content */}
       <div className="py-12 sm:py-16">
-        <div className="container mx-auto px-4">
+        <div className="w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8">
 
           {/* Delivery Options Grid */}
           <div className="grid gap-6 md:grid-cols-2 mb-12">
@@ -127,8 +129,8 @@ export default function ShippingPage() {
                   </CardHeader>
                   <CardContent>
                     <ul className="space-y-2">
-                      {option.features.map((feature, index) => (
-                        <li key={index} className="flex items-start gap-2 text-sm text-muted-foreground">
+                      {option.features.map((feature) => (
+                        <li key={feature} className="flex items-start gap-2 text-sm text-muted-foreground">
                           <span className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
                           {feature}
                         </li>
