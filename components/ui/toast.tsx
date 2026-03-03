@@ -65,7 +65,10 @@ const icons: Record<ToastType, ReactNode> = {
 function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }) {
   return (
     <div
+      role="button"
+      tabIndex={0}
       onClick={onDismiss}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onDismiss(); } }}
       className={cn(
         "group pointer-events-auto relative flex w-full cursor-pointer items-center gap-3 rounded-md border bg-popover p-4 pr-10 text-popover-foreground shadow-lg transition-all",
         "animate-in slide-in-from-bottom fade-in-0",

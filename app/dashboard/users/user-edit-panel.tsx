@@ -6,6 +6,7 @@ import { ArrowLeft, Loader2, Mail, Key, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { Separator } from "@/components/ui/separator";
 import {
   Select,
@@ -30,6 +31,7 @@ import {
   adminGeneratePassword,
   type UserWithOrderCount,
 } from "@/server/actions/users";
+import { type CompanyWithMemberCount } from "@/server/actions/companies";
 import { toast } from "@/components/ui/toast";
 
 interface UserEditPanelProps {
@@ -37,6 +39,7 @@ interface UserEditPanelProps {
   onClose: () => void;
   user: UserWithOrderCount | null;
   currentUserId: string;
+  companies: CompanyWithMemberCount[];
 }
 
 export function UserEditPanel({
@@ -44,6 +47,7 @@ export function UserEditPanel({
   onClose,
   user,
   currentUserId,
+  companies,
 }: UserEditPanelProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
@@ -58,9 +62,9 @@ export function UserEditPanel({
     email: "",
     phone: "",
     role: "user" as "user" | "admin",
+    companyId: "" as string,
   });
 
-  // Handle open/close animations and form data initialization
   useEffect(() => {
     if (isOpen && user) {
       setFormData({
@@ -68,6 +72,7 @@ export function UserEditPanel({
         email: user.email,
         phone: "",
         role: user.role,
+        companyId: user.companyId || "",
       });
       setIsVisible(true);
       setIsClosing(false);
@@ -97,6 +102,7 @@ export function UserEditPanel({
         email: formData.email,
         phone: formData.phone || null,
         role: formData.role,
+        companyId: formData.companyId || null,
       });
 
       toast.success("User updated successfully");
@@ -104,7 +110,7 @@ export function UserEditPanel({
       handleClose();
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Failed to update user"
+        error instanceof Error ? error.message : "Failed to update user",
       );
     } finally {
       setIsLoading(false);
@@ -120,7 +126,7 @@ export function UserEditPanel({
       toast.success("Password reset link sent to " + user.email);
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Failed to send reset link"
+        error instanceof Error ? error.message : "Failed to send reset link",
       );
     } finally {
       setIsSendingReset(false);
@@ -137,7 +143,7 @@ export function UserEditPanel({
       setShowGenerateConfirm(false);
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Failed to generate password"
+        error instanceof Error ? error.message : "Failed to generate password",
       );
     } finally {
       setIsGeneratingPassword(false);
@@ -155,15 +161,15 @@ export function UserEditPanel({
           isClosing ? "translate-x-full" : "translate-x-0"
         } ${!isClosing && isOpen ? "animate-in slide-in-from-right" : ""}`}
       >
-        <div className="flex flex-col h-full">
+        <div className='flex flex-col h-full'>
           {/* Header */}
-          <div className="flex items-center gap-4 px-6 py-4 border-b bg-background">
-            <Button variant="ghost" size="icon" onClick={handleClose}>
-              <ArrowLeft className="h-5 w-5" />
+          <div className='flex items-center gap-4 px-6 py-4 border-b bg-background'>
+            <Button variant='ghost' size='icon' onClick={handleClose}>
+              <ArrowLeft className='h-5 w-5' />
             </Button>
             <div>
-              <h1 className="text-xl font-semibold">Edit User</h1>
-              <p className="text-sm text-muted-foreground">
+              <h1 className='text-xl font-semibold'>Edit User</h1>
+              <p className='text-sm text-muted-foreground'>
                 Update user profile and manage access
               </p>
             </div>
@@ -172,49 +178,48 @@ export function UserEditPanel({
           {/* Form Content */}
           <form
             onSubmit={handleSubmit}
-            className="flex flex-col flex-1 overflow-hidden"
+            className='flex flex-col flex-1 overflow-hidden'
           >
-            <div className="flex-1 overflow-y-auto px-6 py-6">
-              <div className="max-w-2xl mx-auto space-y-6">
+            <div className='flex-1 overflow-y-auto px-6 py-6'>
+              <div className='max-w-2xl mx-auto space-y-6'>
                 {/* Name */}
-                <div className="space-y-2">
-                  <Label htmlFor="name">Name</Label>
+                <div className='space-y-2'>
+                  <Label htmlFor='name'>Name</Label>
                   <Input
-                    id="name"
+                    id='name'
                     value={formData.name}
                     onChange={(e) => handleChange("name", e.target.value)}
-                    placeholder="John Doe"
+                    placeholder='John Doe'
                   />
                 </div>
 
                 {/* Email */}
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
+                <div className='space-y-2'>
+                  <Label htmlFor='email'>Email</Label>
                   <Input
-                    id="email"
-                    type="email"
+                    id='email'
+                    type='email'
                     value={formData.email}
                     onChange={(e) => handleChange("email", e.target.value)}
-                    placeholder="john@example.com"
+                    placeholder='john@example.com'
                     required
                   />
                 </div>
 
                 {/* Phone */}
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Phone</Label>
-                  <Input
-                    id="phone"
-                    type="tel"
+                <div className='space-y-2'>
+                  <Label htmlFor='phone'>Phone</Label>
+                  <PhoneInput
+                    id='phone'
                     value={formData.phone}
-                    onChange={(e) => handleChange("phone", e.target.value)}
-                    placeholder="+61 4XX XXX XXX"
+                    onChange={(value) => handleChange("phone", value || "")}
+                    placeholder='4XX XXX XXX'
                   />
                 </div>
 
                 {/* Role */}
-                <div className="space-y-2">
-                  <Label htmlFor="role">Role</Label>
+                <div className='space-y-2'>
+                  <Label htmlFor='role'>Role</Label>
                   <Select
                     value={formData.role}
                     onValueChange={(value: "user" | "admin") =>
@@ -223,61 +228,93 @@ export function UserEditPanel({
                     disabled={isCurrentUser}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select role" />
+                      <SelectValue placeholder='Select role' />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="user">User</SelectItem>
-                      <SelectItem value="admin">Admin</SelectItem>
+                      <SelectItem value='user'>User</SelectItem>
+                      <SelectItem value='admin'>Admin</SelectItem>
                     </SelectContent>
                   </Select>
                   {isCurrentUser && (
-                    <p className="text-xs text-muted-foreground">
+                    <p className='text-xs text-muted-foreground'>
                       You cannot change your own role.
                     </p>
                   )}
                 </div>
 
+                {/* Company */}
+                <div className='space-y-2'>
+                  <Label htmlFor='company'>Company</Label>
+                  <Select
+                    value={formData.companyId || "none"}
+                    onValueChange={(value) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        companyId: value === "none" ? "" : value,
+                      }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder='Select company' />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value='none'>No Company</SelectItem>
+                      {companies.map((company) => (
+                        <SelectItem key={company.id} value={company.id}>
+                          {company.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className='text-xs text-muted-foreground'>
+                    Assign this user to a company.
+                  </p>
+                </div>
+
                 <Separator />
 
                 {/* Password Management */}
-                <div className="space-y-4">
-                  <Label className="text-base">Password Management</Label>
-                  <div className="flex flex-col gap-3">
+                <div className='space-y-4'>
+                  <Label className='text-base'>Password Management</Label>
+                  <div className='flex flex-col gap-3'>
                     <Button
-                      type="button"
-                      variant="outline"
+                      type='button'
+                      variant='outline'
                       onClick={handleSendResetLink}
                       disabled={isSendingReset}
-                      className="justify-start h-auto py-4"
+                      className='justify-start h-auto py-4'
                     >
                       {isSendingReset ? (
-                        <Loader2 className="mr-3 h-5 w-5 animate-spin" />
+                        <Loader2 className='mr-3 h-5 w-5 animate-spin' />
                       ) : (
-                        <Mail className="mr-3 h-5 w-5" />
+                        <Mail className='mr-3 h-5 w-5' />
                       )}
-                      <div className="text-left">
-                        <div className="font-medium">Send Password Reset Link</div>
-                        <div className="text-sm text-muted-foreground font-normal">
-                          Sends an email with a link for the user to set their own password
+                      <div className='text-left'>
+                        <div className='font-medium'>
+                          Send Password Reset Link
+                        </div>
+                        <div className='text-sm text-muted-foreground font-normal'>
+                          Sends an email with a link for the user to set their
+                          own password
                         </div>
                       </div>
                     </Button>
 
                     <Button
-                      type="button"
-                      variant="outline"
+                      type='button'
+                      variant='outline'
                       onClick={() => setShowGenerateConfirm(true)}
                       disabled={isGeneratingPassword}
-                      className="justify-start h-auto py-4"
+                      className='justify-start h-auto py-4'
                     >
                       {isGeneratingPassword ? (
-                        <Loader2 className="mr-3 h-5 w-5 animate-spin" />
+                        <Loader2 className='mr-3 h-5 w-5 animate-spin' />
                       ) : (
-                        <Key className="mr-3 h-5 w-5" />
+                        <Key className='mr-3 h-5 w-5' />
                       )}
-                      <div className="text-left">
-                        <div className="font-medium">Generate New Password</div>
-                        <div className="text-sm text-muted-foreground font-normal">
+                      <div className='text-left'>
+                        <div className='font-medium'>Generate New Password</div>
+                        <div className='text-sm text-muted-foreground font-normal'>
                           Creates a random password and emails it to the user
                         </div>
                       </div>
@@ -288,13 +325,15 @@ export function UserEditPanel({
             </div>
 
             {/* Footer */}
-            <div className="border-t bg-background">
-              <div className="max-w-2xl mx-auto flex items-center justify-end gap-3 px-6 py-4">
-                <Button type="button" variant="outline" onClick={handleClose}>
+            <div className='border-t bg-background'>
+              <div className='max-w-2xl mx-auto flex items-center justify-end gap-3 px-6 py-4'>
+                <Button type='button' variant='outline' onClick={handleClose}>
                   Cancel
                 </Button>
-                <Button type="submit" disabled={isLoading || !formData.email}>
-                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                <Button type='submit' disabled={isLoading || !formData.email}>
+                  {isLoading && (
+                    <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                  )}
                   Save Changes
                 </Button>
               </div>
@@ -304,11 +343,14 @@ export function UserEditPanel({
       </div>
 
       {/* Confirmation Dialog for Generate Password */}
-      <AlertDialog open={showGenerateConfirm} onOpenChange={setShowGenerateConfirm}>
+      <AlertDialog
+        open={showGenerateConfirm}
+        onOpenChange={setShowGenerateConfirm}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-amber-500" />
+            <AlertDialogTitle className='flex items-center gap-2'>
+              <AlertTriangle className='h-5 w-5 text-amber-500' />
               Generate New Password?
             </AlertDialogTitle>
             <AlertDialogDescription>
@@ -327,7 +369,7 @@ export function UserEditPanel({
               disabled={isGeneratingPassword}
             >
               {isGeneratingPassword && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className='mr-2 h-4 w-4 animate-spin' />
               )}
               Generate & Send
             </AlertDialogAction>

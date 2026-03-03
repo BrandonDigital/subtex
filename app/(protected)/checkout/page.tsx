@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
-import { CheckoutClient } from "@/components/checkout-client";
+import { CheckoutClient } from "./checkout-client";
 import { auth } from "@/server/auth";
 import { db } from "@/server/db";
 import { addresses as addressesTable, users } from "@/server/schemas";
 import { eq } from "drizzle-orm";
 import { getDeliveryZones } from "@/server/actions/admin";
+import { getCuttingFeePerSheet } from "@/server/actions/settings";
 
 export const metadata: Metadata = {
   title: "Checkout",
@@ -38,12 +39,15 @@ export default async function CheckoutPage() {
     }
   }
 
-  // Fetch delivery zones from database
-  const deliveryZones = await getDeliveryZones();
+  // Fetch delivery zones and cutting fee from database
+  const [deliveryZones, cuttingFeePerSheetInCents] = await Promise.all([
+    getDeliveryZones(),
+    getCuttingFeePerSheet(),
+  ]);
 
   return (
     <div className='py-12'>
-      <div className='container mx-auto px-4'>
+      <div className='w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8'>
         <div className='max-w-6xl mx-auto'>
           <h1 className='text-3xl font-bold mb-8'>Checkout</h1>
           <CheckoutClient
@@ -52,6 +56,7 @@ export default async function CheckoutPage() {
             userName={userName}
             userPhone={userPhone}
             userCompany={userCompany}
+            cuttingFeePerSheetInCents={cuttingFeePerSheetInCents}
           />
         </div>
       </div>

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { VerifyEmailForm } from "@/components/verify-email-form";
+import { VerifyEmailForm } from "./verify-email-form";
 
 export const metadata: Metadata = {
   title: "Verify Email",

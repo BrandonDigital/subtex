@@ -15,8 +15,9 @@ import {
   getInventoryChannel,
   PURCHASES_CHANNEL,
   PUSHER_EVENTS,
-} from "@/lib/pusher-client";
+} from "@/lib/clients/pusher-client";
 import { useCart } from "@/hooks/use-cart";
+import { authClient } from "@/lib/clients/auth-client";
 import { toast } from "@/components/ui/toast";
 
 // Event types (matching server-side)
@@ -54,17 +55,10 @@ function getGuestSessionId(): string | null {
   return localStorage.getItem("subtex-guest-session-id");
 }
 
-// Get the user ID from the session cookie (if available)
-// This is a simple check - in production you might want to use the auth client
-function getCurrentUserId(): string | null {
-  if (typeof window === "undefined") return null;
-  // We can't easily get the user ID on the client, so we rely on sessionId comparison
-  return null;
-}
-
 export function PusherProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { items } = useCart();
+  const { data: session } = authClient.useSession();
   const subscribedChannels = useRef<Map<string, Channel>>(new Map());
   const isConnected = useRef(false);
 
@@ -78,18 +72,15 @@ export function PusherProvider({ children }: { children: ReactNode }) {
 
   // Check if the current user/session initiated the reservation
   const isOwnReservation = useCallback((event: StockReservedEvent): boolean => {
+    if (session?.user?.id && event.reservedByUserId === session.user.id) {
+      return true;
+    }
     const guestSessionId = getGuestSessionId();
-    const userId = getCurrentUserId();
-
-    // If the event was triggered by the same session, don't show notification
     if (guestSessionId && event.reservedBySessionId === guestSessionId) {
       return true;
     }
-    if (userId && event.reservedByUserId === userId) {
-      return true;
-    }
     return false;
-  }, []);
+  }, [session]);
 
   // Look up product image from cart items
   const getProductImage = useCallback(

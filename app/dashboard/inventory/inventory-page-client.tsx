@@ -9,20 +9,27 @@ interface Product {
   name: string;
   partNumber: string | null;
   basePriceInCents: number;
+  imageUrl: string | null;
   isAcm: boolean;
   acmColor: "white" | "black" | null;
-  acmMaterial: "gloss" | "matte" | null;
+  acmMaterial: "gloss/matte" | "gloss/primer" | null;
   acmSize: "standard" | "xl" | null;
   stock: number;
   lowStockThreshold: number;
   holdingFeeInCents: number;
   holdingPeriodDays: number;
+  reserved: number;
+  sold: number;
+  available: number;
 }
 
 interface InventoryPageClientProps {
   products: Product[];
   stats: {
     totalStock: number;
+    totalReserved: number;
+    totalSold: number;
+    totalAvailable: number;
     productCount: number;
     lowStockCount: number;
     outOfStockCount: number;
@@ -48,11 +55,7 @@ export function InventoryPageClient({
 
   return (
     <>
-      <InventoryTable
-        products={products}
-        stats={stats}
-        onEdit={handleEdit}
-      />
+      <InventoryTable products={products} stats={stats} onEdit={handleEdit} />
 
       {/* Edit Inventory Panel Overlay */}
       <InventoryEditPanel

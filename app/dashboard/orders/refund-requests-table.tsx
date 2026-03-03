@@ -20,6 +20,16 @@ import {
 import { approveRefund, rejectRefund } from "@/server/actions/refunds";
 import { toast } from "@/components/ui/toast";
 
+interface RefundRequestItemData {
+  id: string;
+  quantity: number;
+  amountInCents: number;
+  orderItem: {
+    name: string;
+    partNumber: string | null;
+  };
+}
+
 interface RefundRequest {
   id: string;
   reason: string;
@@ -41,6 +51,7 @@ interface RefundRequest {
     name: string | null;
     email: string;
   };
+  items?: RefundRequestItemData[];
 }
 
 interface RefundRequestsTableProps {
@@ -187,6 +198,32 @@ export function RefundRequestsTable({ requests }: RefundRequestsTableProps) {
                     <p className="font-medium text-red-600">{formatPrice(request.requestedAmountInCents)}</p>
                   </div>
                 </div>
+
+                {request.items && request.items.length > 0 && (
+                  <div className="border rounded-lg overflow-hidden">
+                    <div className="bg-muted/50 px-3 py-2 text-xs font-medium text-muted-foreground">
+                      Items Requested for Refund
+                    </div>
+                    <div className="divide-y">
+                      {request.items.map((ri) => (
+                        <div key={ri.id} className="flex items-center justify-between px-3 py-2 text-sm">
+                          <div>
+                            <span className="font-medium">{ri.orderItem.name}</span>
+                            {ri.orderItem.partNumber && (
+                              <span className="text-muted-foreground ml-2 text-xs">
+                                {ri.orderItem.partNumber}
+                              </span>
+                            )}
+                            <span className="text-muted-foreground ml-2">
+                              &times; {ri.quantity}
+                            </span>
+                          </div>
+                          <span className="font-medium">{formatPrice(ri.amountInCents)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div className="bg-muted p-4 rounded-lg">
                   <p className="text-sm text-muted-foreground mb-1">Customer&apos;s Reason:</p>

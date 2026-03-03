@@ -17,7 +17,7 @@ export default function DashboardLayout({
   // If not admin, redirect to home
 
   return (
-    <div className="p-6 lg:p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       {children}
     </div>
   );

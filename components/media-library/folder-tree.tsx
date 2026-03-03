@@ -196,7 +196,10 @@ export function FolderTree({
                             ? "bg-accent text-accent-foreground"
                             : "hover:bg-muted",
                         )}
+                        role="button"
+                        tabIndex={0}
                         onClick={() => handleFolderClick(folder.path)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleFolderClick(folder.path); } }}
                       >
                         <button
                           className='p-0.5 hover:bg-muted-foreground/20 rounded'

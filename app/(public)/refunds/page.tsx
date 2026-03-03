@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import Script from "next/script";
+import Link from "next/link";
 import { siteConfig, seoContent, generateBreadcrumbSchema } from "@/lib/seo";
 
 export const metadata: Metadata = {
@@ -10,11 +12,12 @@ export const metadata: Metadata = {
   },
 };
 
-// JSON-LD Component
-function JsonLd({ data }: { data: object }) {
+function JsonLd({ id, data }: { id: string; data: object }) {
   return (
-    <script
+    <Script
+      id={id}
       type="application/ld+json"
+      strategy="afterInteractive"
       dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
     />
   );
@@ -28,11 +31,11 @@ export default function RefundsPage() {
 
   return (
     <>
-      <JsonLd data={breadcrumbSchema} />
+      <JsonLd id="schema-refunds" data={breadcrumbSchema} />
 
       {/* Page Header */}
       <div className="bg-zinc-50 border-b">
-        <div className="container mx-auto px-4 py-16 sm:py-20">
+        <div className="w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20">
           <div className="max-w-3xl mx-auto text-center">
             <h1 className="text-4xl sm:text-5xl font-semibold text-zinc-900 mb-4 tracking-tight">
               Refund Policy
@@ -48,7 +51,7 @@ export default function RefundsPage() {
 
       {/* Content */}
       <div className="py-12 sm:py-16">
-        <div className="container mx-auto px-4">
+        <div className="w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-3xl mx-auto prose prose-zinc dark:prose-invert prose-lg">
             <h2>1. Eligibility for Refunds</h2>
             <p>You may be eligible for a refund if:</p>
@@ -74,7 +77,7 @@ export default function RefundsPage() {
               <li>Submit your request for review</li>
             </ol>
             <p>
-              Alternatively, you can contact us directly via our <a href="/contact">contact form</a>.
+              Alternatively, you can contact us directly via our <Link href="/contact">contact form</Link>.
             </p>
 
             <h2>4. Refund Processing</h2>

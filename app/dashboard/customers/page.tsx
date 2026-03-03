@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import {
   getCustomersWithAnalytics,
   getCustomerStats,
+  getGuestCustomers,
 } from "@/server/actions/customers";
 import { CustomersPageClient } from "./customers-page-client";
 import { auth } from "@/server/auth";
@@ -19,10 +20,17 @@ export default async function DashboardCustomersPage() {
     redirect("/login");
   }
 
-  const [customers, stats] = await Promise.all([
+  const [customers, stats, guestCustomers] = await Promise.all([
     getCustomersWithAnalytics(),
     getCustomerStats(),
+    getGuestCustomers(),
   ]);
 
-  return <CustomersPageClient customers={customers} stats={stats} />;
+  return (
+    <CustomersPageClient
+      customers={customers}
+      stats={stats}
+      guestCustomers={guestCustomers}
+    />
+  );
 }

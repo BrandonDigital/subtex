@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Package, Truck, CheckCircle, Clock, MapPin, AlertCircle, RotateCcw } from "lucide-react";
+import Image from "next/image";
+import { Package, Truck, CheckCircle, Clock, MapPin, RotateCcw } from "lucide-react";
+import { CuttingSpecBadge } from "@/components/cut-plan-configurator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,6 +13,7 @@ import {
   trySendOrderConfirmationEmail,
 } from "@/server/actions/orders";
 import { RefundRequestButton } from "./refund-request-button";
+import { CancelRefundButton } from "./cancel-refund-button";
 import { ClearCartOnSuccess } from "@/components/clear-cart-on-success";
 
 export const metadata: Metadata = {
@@ -67,7 +70,7 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
   if (orders.length === 0) {
     return (
       <div className="py-12">
-        <div className="container mx-auto px-4">
+        <div className="w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-2xl mx-auto text-center">
             <div className="h-24 w-24 rounded-full bg-muted flex items-center justify-center mx-auto mb-6">
               <Package className="h-12 w-12 text-muted-foreground" />
@@ -88,7 +91,7 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
   return (
     <div className="py-12">
       {success === "true" && <ClearCartOnSuccess />}
-      <div className="container mx-auto px-4">
+      <div className="w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto">
           <h1 className="text-3xl font-bold mb-8">My Orders</h1>
 
@@ -114,30 +117,50 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
                           Placed on {formatDate(order.createdAt)}
                         </p>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant={status.variant} className="w-fit">
-                          <StatusIcon className="h-3 w-3 mr-1" />
-                          {status.label}
-                        </Badge>
-                        {hasPendingRefund && (
-                          <Badge variant="secondary" className="w-fit">
-                            <RotateCcw className="h-3 w-3 mr-1" />
-                            Refund Pending
-                          </Badge>
-                        )}
-                      </div>
+                      <Badge variant={status.variant} className="w-fit">
+                        <StatusIcon className="h-3 w-3 mr-1" />
+                        {status.label}
+                      </Badge>
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     {/* Items */}
-                    <div className="space-y-2">
-                      {order.items.map((item, index) => (
+                    <div className="space-y-3">
+                      {order.items.map((item) => (
                         <div
-                          key={index}
-                          className="flex justify-between text-sm"
+                          key={item.id}
+                          className="flex items-center gap-3"
                         >
-                          <span>{item.name}</span>
-                          <span className="text-muted-foreground">
+                          <div className="h-12 w-12 shrink-0 rounded-md bg-muted overflow-hidden relative">
+                            {item.product?.imageUrl ? (
+                              <Image
+                                src={item.product.imageUrl}
+                                alt={item.name}
+                                fill
+                                className="object-cover"
+                                sizes="48px"
+                              />
+                            ) : (
+                              <div className="h-full w-full flex items-center justify-center text-muted-foreground">
+                                <Package className="h-5 w-5" />
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{item.name}</p>
+                            {(item.color || item.size) && (
+                              <p className="text-xs text-muted-foreground">
+                                {[item.color, item.material, item.size].filter(Boolean).join(" · ")}
+                              </p>
+                            )}
+                            {item.cuttingSpec && (() => {
+                              try {
+                                const spec = typeof item.cuttingSpec === "string" ? JSON.parse(item.cuttingSpec) : item.cuttingSpec;
+                                return <div className="mt-0.5"><CuttingSpecBadge spec={spec} /></div>;
+                              } catch { return null; }
+                            })()}
+                          </div>
+                          <span className="text-sm text-muted-foreground shrink-0">
                             × {item.quantity}
                           </span>
                         </div>
@@ -159,6 +182,23 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
                             ? "Interstate Shipping"
                             : "International Shipping"}
                         </p>
+                        {order.deliveryMethod === "click_collect" &&
+                          order.collectionDate && (
+                            <p>
+                              <span className="text-muted-foreground">Collection: </span>
+                              {new Intl.DateTimeFormat("en-AU", {
+                                weekday: "short",
+                                day: "numeric",
+                                month: "short",
+                                year: "numeric",
+                              }).format(new Date(order.collectionDate + "T00:00:00"))}
+                              {order.collectionSlot && (
+                                <span className="text-muted-foreground">
+                                  {" "}({order.collectionSlot === "morning" ? "8:00 AM – 11:30 AM" : "11:30 AM – 3:00 PM"})
+                                </span>
+                              )}
+                            </p>
+                          )}
                         {order.deliveryMethod === "click_collect" &&
                           order.holdingExpiresAt && (
                             <p className="text-amber-600">
@@ -182,24 +222,20 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
                     {/* Refund Request Status */}
                     {order.refundRequests && order.refundRequests.length > 0 && (
                       <div className="bg-muted/50 rounded-lg p-4 space-y-2">
-                        <p className="text-sm font-medium">Refund History</p>
-                        {order.refundRequests.map((request: any, idx: number) => (
-                          <div key={idx} className="flex items-center justify-between text-sm">
+                        {order.refundRequests.map((request: any) => (
+                          <div key={request.id} className="flex items-center justify-between text-sm">
                             <span className="text-muted-foreground">
-                              {request.status === "pending" && "Request pending review"}
-                              {request.status === "approved" && "Approved"}
-                              {request.status === "rejected" && "Request declined"}
+                              {request.status === "pending" && "Refund request pending review"}
+                              {request.status === "approved" && "Refund approved"}
+                              {request.status === "rejected" && "Refund request declined"}
                               {request.status === "processed" && "Refund processed"}
                             </span>
-                            <Badge
-                              variant={
-                                request.status === "pending" ? "secondary" :
-                                request.status === "rejected" ? "destructive" :
-                                "outline"
-                              }
-                            >
-                              {request.status}
-                            </Badge>
+                            {request.status === "pending" && (
+                              <CancelRefundButton
+                                requestId={request.id}
+                                orderNumber={order.orderNumber}
+                              />
+                            )}
                           </div>
                         ))}
                       </div>
@@ -219,7 +255,17 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
                         <RefundRequestButton
                           orderId={order.id}
                           orderNumber={order.orderNumber}
-                          maxRefundable={order.totalInCents - order.refundedAmountInCents}
+                          items={order.items.map((item) => ({
+                            id: item.id,
+                            name: item.name,
+                            partNumber: item.partNumber,
+                            color: item.color,
+                            material: item.material,
+                            size: item.size,
+                            quantity: item.quantity,
+                            refundedQuantity: item.refundedQuantity,
+                            unitPriceInCents: item.unitPriceInCents,
+                          }))}
                         />
                       )}
                     </div>

@@ -4,9 +4,13 @@ import { useState, useMemo } from "react";
 import { Minus, Plus, ShoppingCart, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useCart } from "@/hooks/use-cart";
+import { useCart, type CuttingSpec } from "@/hooks/use-cart";
 import { StockNotifyButton } from "./stock-notify-button";
 import { BackorderNotice } from "@/components/backorder-notice";
+import {
+  CutPlanConfigurator,
+  SHEET_DIMENSIONS,
+} from "@/components/cut-plan-configurator";
 
 interface BulkDiscount {
   id: string;
@@ -25,6 +29,9 @@ interface AddToCartSectionProps {
   color?: string | null;
   material?: string | null;
   size?: string | null;
+  isAcm?: boolean;
+  sheetWidthMm?: number;
+  sheetHeightMm?: number;
   isSubscribedToStock?: boolean;
   userEmail?: string | null;
 }
@@ -47,16 +54,32 @@ export function AddToCartSection({
   color,
   material,
   size,
+  isAcm = false,
+  sheetWidthMm,
+  sheetHeightMm,
   isSubscribedToStock = false,
   userEmail,
 }: AddToCartSectionProps) {
   const { addItem, items } = useCart();
   const [quantity, setQuantity] = useState(1);
+  const [cuttingSpec, setCuttingSpec] = useState<CuttingSpec | null>(null);
 
-  // Get quantity already in cart for this product
+  // Determine sheet dimensions for cutting
+  const effectiveWidth =
+    sheetWidthMm ||
+    (size ? SHEET_DIMENSIONS[size]?.width : undefined) ||
+    0;
+  const effectiveHeight =
+    sheetHeightMm ||
+    (size ? SHEET_DIMENSIONS[size]?.height : undefined) ||
+    0;
+  const canCut = isAcm && effectiveWidth > 0 && effectiveHeight > 0;
+
+  // Get total quantity already in cart for this product (across all entries: cut + uncut)
   const cartQuantity = useMemo(() => {
-    const cartItem = items.find((item) => item.productId === productId);
-    return cartItem?.quantity || 0;
+    return items
+      .filter((item) => item.productId === productId)
+      .reduce((sum, item) => sum + item.quantity, 0);
   }, [items, productId]);
 
   // Total quantity includes what's in cart + what user is about to add
@@ -107,6 +130,7 @@ export function AddToCartSection({
         discountPercent: d.discountPercent,
       })),
       stock,
+      cuttingSpec: cuttingSpec || undefined,
     });
   };
 
@@ -115,21 +139,37 @@ export function AddToCartSection({
 
   return (
     <div className='space-y-6'>
+      {/* CNC Cutting Service (ACM products only) */}
+      {canCut && (
+        <div className='space-y-3'>
+          <label className='text-sm font-medium block'>
+            <span className='mb-3 block'>Cutting Service</span>
+            <CutPlanConfigurator
+              sheetWidthMm={effectiveWidth}
+              sheetHeightMm={effectiveHeight}
+              cuttingSpec={cuttingSpec}
+              onCuttingSpecChange={setCuttingSpec}
+            />
+          </label>
+        </div>
+      )}
+
       {/* Quantity Selector */}
       <div className='space-y-3'>
-        <label className='text-sm font-medium'>Quantity</label>
+        <label htmlFor='product-quantity' className='text-sm font-medium'>Quantity</label>
         <div className='flex items-center gap-4'>
-          <div className='flex items-center border rounded-lg'>
+          <div className='flex items-center border'>
             <Button
               variant='ghost'
               size='icon'
-              className='h-11 w-11 rounded-none rounded-l-lg'
-              onClick={() => setQuantity(Math.max(1, quantity - 1))}
+              className='h-11 w-11'
+              onClick={() => setQuantity((prev) => Math.max(1, prev - 1))}
               disabled={quantity <= 1}
             >
               <Minus className='h-4 w-4' />
             </Button>
             <input
+              id='product-quantity'
               type='number'
               min={1}
               value={quantity}
@@ -142,8 +182,8 @@ export function AddToCartSection({
             <Button
               variant='ghost'
               size='icon'
-              className='h-11 w-11 rounded-none rounded-r-lg'
-              onClick={() => setQuantity(quantity + 1)}
+              className='h-11 w-11'
+              onClick={() => setQuantity((prev) => prev + 1)}
             >
               <Plus className='h-4 w-4' />
             </Button>
@@ -172,7 +212,7 @@ export function AddToCartSection({
 
         {/* Bulk Discount Progress */}
         {nextDiscount && unitsUntilNextDiscount <= 10 && (
-          <div className='flex items-center gap-2 p-3 rounded-lg bg-green-50 border border-green-200'>
+          <div className='flex items-center gap-2 p-3 bg-green-50 border border-green-200'>
             <Tag className='h-4 w-4 text-green-600 shrink-0' />
             <p className='text-sm text-green-700'>
               Add{" "}
@@ -213,7 +253,7 @@ export function AddToCartSection({
       </div>
 
       {/* Subtotal and Add to Cart */}
-      <div className='space-y-4 p-6 rounded-lg bg-muted/50 border'>
+      <div className='space-y-4 p-6 bg-muted/50 border'>
         {/* Subtotal */}
         <div className='flex items-center justify-between'>
           <span className='font-medium'>Subtotal</span>

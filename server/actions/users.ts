@@ -4,6 +4,7 @@ import { db } from "../db";
 import { auth } from "../auth";
 import { headers } from "next/headers";
 import { users, passwordResetTokens } from "../schemas/users";
+import { companies } from "../schemas/companies";
 import { orders } from "../schemas/orders";
 import { eq, sql, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -27,6 +28,8 @@ export type UserWithOrderCount = {
   image: string | null;
   role: "user" | "admin";
   emailVerified: boolean;
+  companyId: string | null;
+  companyName: string | null;
   createdAt: Date;
   orderCount: number;
 };
@@ -34,7 +37,6 @@ export type UserWithOrderCount = {
 export async function getUsers(): Promise<UserWithOrderCount[]> {
   await requireAdmin();
 
-  // Get users with order counts using a subquery
   const usersWithOrders = await db
     .select({
       id: users.id,
@@ -43,11 +45,17 @@ export async function getUsers(): Promise<UserWithOrderCount[]> {
       image: users.image,
       role: users.role,
       emailVerified: users.emailVerified,
+      companyId: users.companyId,
+      companyName: sql<string | null>`(
+        SELECT "companies"."name"
+        FROM "companies"
+        WHERE "companies"."id" = "users"."company_id"
+      )`.as("company_name"),
       createdAt: users.createdAt,
       orderCount: sql<number>`(
         SELECT COUNT(*)::int 
         FROM ${orders} 
-        WHERE ${orders.userId} = ${users.id}
+        WHERE ${orders.userId} = "users"."id"
       )`.as("order_count"),
     })
     .from(users)
@@ -149,6 +157,7 @@ export async function adminUpdateUser(
     email?: string;
     phone?: string | null;
     role?: "user" | "admin";
+    companyId?: string | null;
   }
 ) {
   const admin = await requireAdmin();
@@ -169,12 +178,26 @@ export async function adminUpdateUser(
     }
   }
 
+  // If companyId is being set, also update the legacy company name field
+  const updateData: Record<string, unknown> = {
+    ...data,
+    updatedAt: new Date(),
+  };
+
+  if (data.companyId !== undefined) {
+    if (data.companyId) {
+      const company = await db.query.companies.findFirst({
+        where: eq(companies.id, data.companyId),
+      });
+      updateData.company = company?.name || null;
+    } else {
+      updateData.company = null;
+    }
+  }
+
   const [updatedUser] = await db
     .update(users)
-    .set({
-      ...data,
-      updatedAt: new Date(),
-    })
+    .set(updateData)
     .where(eq(users.id, userId))
     .returning();
 

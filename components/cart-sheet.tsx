@@ -23,10 +23,12 @@ import { Badge } from "@/components/ui/badge";
 import { useCart } from "@/hooks/use-cart";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { BackorderNotice } from "@/components/backorder-notice";
+import { CuttingSpecBadge } from "@/components/cut-plan-configurator";
 
 interface CartSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  cuttingFeePerSheetInCents?: number;
 }
 
 function formatPrice(priceInCents: number): string {
@@ -36,19 +38,35 @@ function formatPrice(priceInCents: number): string {
   }).format(priceInCents / 100);
 }
 
-export function CartSheet({ open, onOpenChange }: CartSheetProps) {
-  const {
-    items,
-    updateQuantity,
-    removeItem,
-    clearCart,
-    totalItems,
-    subtotalInCents,
-  } = useCart();
-  const isMobile = useIsMobile();
+interface CartContentProps {
+  isMobile?: boolean;
+  onOpenChange: (open: boolean) => void;
+  totalItems: number;
+  items: ReturnType<typeof useCart>["items"];
+  updateQuantity: ReturnType<typeof useCart>["updateQuantity"];
+  removeItem: ReturnType<typeof useCart>["removeItem"];
+  clearCart: ReturnType<typeof useCart>["clearCart"];
+  subtotalInCents: number;
+  cuttingFeePerSheetInCents: number;
+}
 
-  // Shared cart content component
-  const CartContent = ({ isMobile = false }: { isMobile?: boolean }) => (
+function CartContent({
+  isMobile = false,
+  onOpenChange,
+  totalItems,
+  items,
+  updateQuantity,
+  removeItem,
+  clearCart,
+  subtotalInCents,
+  cuttingFeePerSheetInCents,
+}: CartContentProps) {
+  const cuttingSheetCount = items
+    .filter((item) => item.cuttingSpec)
+    .reduce((sum, item) => sum + item.quantity, 0);
+  const cuttingFee = cuttingFeePerSheetInCents * cuttingSheetCount;
+  const estimatedTotal = subtotalInCents + cuttingFee;
+  return (
     <>
       {/* Mobile header with back button */}
       {isMobile && (
@@ -101,25 +119,30 @@ export function CartSheet({ open, onOpenChange }: CartSheetProps) {
         </div>
       ) : (
         <>
-          <div className='flex-1 overflow-y-auto px-6 py-4'>
+          <div className='flex-1 min-h-0 overflow-y-auto px-6 py-4'>
             <div className='space-y-4'>
               {items.map((item) => {
-                const hasDiscount =
-                  item.appliedDiscountPercent &&
-                  item.appliedDiscountPercent > 0;
+                const hasDiscount = (item.appliedDiscountPercent ?? 0) > 0;
                 const basePrice =
                   item.basePriceInCents || item.priceInCents || 0;
                 const currentPrice = item.priceInCents || basePrice;
                 const originalLineTotal = basePrice * item.quantity;
                 const discountedLineTotal = currentPrice * item.quantity;
 
-                // Find next discount tier
+                // Total quantity of this product across all cart entries (cut + uncut)
+                const totalProductQuantity = items
+                  .filter((i) => i.productId === item.productId)
+                  .reduce((sum, i) => sum + i.quantity, 0);
+
+                // Find next discount tier based on total product quantity
                 const nextDiscount = item.bulkDiscounts
-                  ?.filter((d) => d.minQuantity > item.quantity)
+                  ?.filter((d) => d.minQuantity > totalProductQuantity)
                   .sort((a, b) => a.minQuantity - b.minQuantity)[0];
 
+                const itemId = item.cartItemId || item.productId;
+
                 return (
-                  <div key={item.productId} className='flex gap-4'>
+                  <div key={itemId} className='flex gap-4'>
                     {/* Product Image */}
                     <div className='h-20 w-20 shrink-0 rounded-lg bg-muted overflow-hidden relative'>
                       {item.imageUrl ? (
@@ -151,6 +174,14 @@ export function CartSheet({ open, onOpenChange }: CartSheetProps) {
                       <p className='text-xs text-muted-foreground'>
                         Part Number: {item.partNumber}
                       </p>
+
+                      {/* Cutting Spec Badge */}
+                      {item.cuttingSpec && (
+                        <div className='mt-1'>
+                          <CuttingSpecBadge spec={item.cuttingSpec} />
+                        </div>
+                      )}
+
                       <div className='flex items-center gap-2 mt-1'>
                         <p className='text-sm font-medium'>
                           {formatPrice(currentPrice)}
@@ -179,8 +210,8 @@ export function CartSheet({ open, onOpenChange }: CartSheetProps) {
                             className='h-8 w-8 rounded-none'
                             onClick={() =>
                               updateQuantity(
-                                item.productId,
-                                Math.max(1, item.quantity - 1)
+                                itemId,
+                                Math.max(1, item.quantity - 1),
                               )
                             }
                             disabled={item.quantity <= 1}
@@ -195,7 +226,7 @@ export function CartSheet({ open, onOpenChange }: CartSheetProps) {
                             size='icon'
                             className='h-8 w-8 rounded-none'
                             onClick={() =>
-                              updateQuantity(item.productId, item.quantity + 1)
+                              updateQuantity(itemId, item.quantity + 1)
                             }
                           >
                             <Plus className='h-3 w-3' />
@@ -205,19 +236,19 @@ export function CartSheet({ open, onOpenChange }: CartSheetProps) {
                           variant='ghost'
                           size='icon'
                           className='h-8 w-8 text-destructive hover:text-destructive'
-                          onClick={() => removeItem(item.productId)}
+                          onClick={() => removeItem(itemId)}
                         >
                           <Trash2 className='h-4 w-4' />
                         </Button>
                       </div>
 
-                      {/* Backorder Notice */}
+                      {/* Backorder Notice (based on total product quantity across cut + uncut entries) */}
                       {item.stock !== undefined &&
-                        item.quantity > item.stock &&
+                        totalProductQuantity > item.stock &&
                         item.stock > 0 && (
                           <BackorderNotice
                             availableStock={item.stock}
-                            requestedQuantity={item.quantity}
+                            requestedQuantity={totalProductQuantity}
                             variant='compact'
                             className='mt-2'
                           />
@@ -226,8 +257,8 @@ export function CartSheet({ open, onOpenChange }: CartSheetProps) {
                       {/* Next discount tier hint */}
                       {nextDiscount && (
                         <p className='text-xs text-muted-foreground mt-1'>
-                          Add {nextDiscount.minQuantity - item.quantity} more
-                          for {nextDiscount.discountPercent}% off
+                          Add {nextDiscount.minQuantity - totalProductQuantity}{" "}
+                          more for {nextDiscount.discountPercent}% off
                         </p>
                       )}
                     </div>
@@ -257,6 +288,17 @@ export function CartSheet({ open, onOpenChange }: CartSheetProps) {
                   {formatPrice(subtotalInCents)}
                 </span>
               </div>
+              {cuttingFee > 0 && (
+                <div className='flex justify-between text-sm'>
+                  <span className='text-muted-foreground'>
+                    Cutting Service ({cuttingSheetCount}{" "}
+                    {cuttingSheetCount === 1 ? "sheet" : "sheets"})
+                  </span>
+                  <span className='font-medium'>
+                    {formatPrice(cuttingFee)}
+                  </span>
+                </div>
+              )}
               <div className='flex justify-between text-xs text-muted-foreground'>
                 <span>Delivery calculated at checkout</span>
               </div>
@@ -266,7 +308,7 @@ export function CartSheet({ open, onOpenChange }: CartSheetProps) {
 
             <div className='flex justify-between text-base font-medium mb-4'>
               <span>Total</span>
-              <span>{formatPrice(subtotalInCents)} inc. GST</span>
+              <span>{formatPrice(estimatedTotal)} inc. GST</span>
             </div>
 
             <SheetFooter className='flex-col gap-2 sm:flex-col p-0'>
@@ -299,11 +341,33 @@ export function CartSheet({ open, onOpenChange }: CartSheetProps) {
       )}
     </>
   );
+}
+
+export function CartSheet({ open, onOpenChange, cuttingFeePerSheetInCents = 0 }: CartSheetProps) {
+  const {
+    items,
+    updateQuantity,
+    removeItem,
+    clearCart,
+    totalItems,
+    subtotalInCents,
+  } = useCart();
+  const isMobile = useIsMobile();
+
+  const contentProps = {
+    onOpenChange,
+    totalItems,
+    items,
+    updateQuantity,
+    removeItem,
+    clearCart,
+    subtotalInCents,
+    cuttingFeePerSheetInCents,
+  };
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       {isMobile ? (
-        // Mobile: Sheet with back button (leaves room for mobile nav)
         <SheetContent
           side='right'
           hideOverlay
@@ -312,12 +376,11 @@ export function CartSheet({ open, onOpenChange }: CartSheetProps) {
           <SheetHeader className='sr-only'>
             <SheetTitle>Your Cart</SheetTitle>
           </SheetHeader>
-          <CartContent isMobile />
+          <CartContent isMobile {...contentProps} />
         </SheetContent>
       ) : (
-        // Desktop: Regular sheet
         <SheetContent className='flex flex-col w-full sm:max-w-lg p-0'>
-          <CartContent />
+          <CartContent {...contentProps} />
         </SheetContent>
       )}
     </Sheet>

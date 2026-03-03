@@ -1,8 +1,9 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import { Geist, Geist_Mono } from "next/font/google";
 import { headers } from "next/headers";
 import { ToastProvider, ToastBridge } from "@/components/ui/toast";
-import { LayoutClient } from "@/components/layout-client";
+import { LayoutClient } from "@/components/layout/layout-client";
 import { Providers } from "@/components/providers";
 import { ComingSoon } from "@/components/coming-soon";
 import { auth } from "@/server/auth";
@@ -12,6 +13,7 @@ import {
   getUnreadNotificationCount,
   getUserNotifications,
 } from "@/server/actions/notifications";
+import { getCuttingFeePerSheet } from "@/server/actions/settings";
 import "./globals.css";
 import { Analytics } from "@vercel/analytics/next"
 
@@ -113,11 +115,12 @@ export const metadata: Metadata = {
   },
 };
 
-// JSON-LD Structured Data Component
-function JsonLd({ data }: { data: object }) {
+function JsonLd({ id, data }: { id: string; data: object }) {
   return (
-    <script
+    <Script
+      id={id}
       type='application/ld+json'
+      strategy='afterInteractive'
       dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
     />
   );
@@ -128,12 +131,13 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const [session, announcements, notifications, unreadCount] =
+  const [session, announcements, notifications, unreadCount, cuttingFeePerSheetInCents] =
     await Promise.all([
       auth.api.getSession({ headers: await headers() }),
       getActiveAnnouncements(),
       getUserNotifications(),
       getUnreadNotificationCount(),
+      getCuttingFeePerSheet(),
     ]);
 
   // Fetch fresh user data from database to get latest image
@@ -193,8 +197,8 @@ export default async function RootLayout({
       <html lang='en-AU' suppressHydrationWarning>
         <head>
           {/* Structured Data */}
-          <JsonLd data={organizationSchema} />
-          <JsonLd data={websiteSchema} />
+          <JsonLd id='schema-organization' data={organizationSchema} />
+          <JsonLd id='schema-website' data={websiteSchema} />
 
           {/* Preconnect to external domains for performance */}
           <link rel='preconnect' href='https://fonts.googleapis.com' />
@@ -234,8 +238,8 @@ export default async function RootLayout({
     <html lang='en-AU' suppressHydrationWarning>
       <head>
         {/* Structured Data */}
-        <JsonLd data={organizationSchema} />
-        <JsonLd data={websiteSchema} />
+        <JsonLd id='schema-organization' data={organizationSchema} />
+        <JsonLd id='schema-website' data={websiteSchema} />
 
         {/* Preconnect to external domains for performance */}
         <link rel='preconnect' href='https://fonts.googleapis.com' />
@@ -275,6 +279,7 @@ export default async function RootLayout({
               notifications={notifications}
               unreadCount={unreadCount}
               announcements={announcements}
+              cuttingFeePerSheetInCents={cuttingFeePerSheetInCents}
             >
               {children}
             </LayoutClient>

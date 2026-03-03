@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { getUsers, getUserRoleStats } from "@/server/actions/users";
+import { getCompanies } from "@/server/actions/companies";
 import { UsersPageClient } from "./users-page-client";
 import { auth } from "@/server/auth";
 import { redirect } from "next/navigation";
@@ -16,13 +17,18 @@ export default async function DashboardUsersPage() {
     redirect("/login");
   }
 
-  const [users, stats] = await Promise.all([getUsers(), getUserRoleStats()]);
+  const [users, stats, companies] = await Promise.all([
+    getUsers(),
+    getUserRoleStats(),
+    getCompanies(),
+  ]);
 
   return (
     <UsersPageClient
       users={users}
       currentUserId={session.user.id}
       stats={stats}
+      companies={companies}
     />
   );
 }

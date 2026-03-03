@@ -284,13 +284,13 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --radius-2xl: calc(var(--radius) + 8px);
-  --radius-3xl: calc(var(--radius) + 12px);
-  --radius-4xl: calc(var(--radius) + 16px);
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+  --radius-3xl: 0px;
+  --radius-4xl: 0px;
 }
 
 :root {
@@ -374,6 +374,7 @@
   --animate-slide-in-from-top: slideInFromTop 0.3s ease-out;
   --animate-slide-in-from-bottom: slideInFromBottom 0.3s ease-out;
   --animate-spin: spin 1s linear infinite;
+  --animate-spin-slow: spin 10s linear infinite;
 }
 
 @layer base {

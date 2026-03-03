@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import Image from "next/image";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { MapPin, Loader2 } from "lucide-react";
@@ -360,10 +361,12 @@ export function AddressAutocompleteInput({
             ))}
           </ul>
           <div className='px-3 py-2 border-t bg-muted/50'>
-            <img
+            <Image
               src='https://developers.google.com/static/maps/documentation/images/powered_by_google_on_white.png'
               alt='Powered by Google'
-              className='h-4 dark:invert'
+              width={144}
+              height={18}
+              className='h-4 w-auto dark:invert'
             />
           </div>
         </div>

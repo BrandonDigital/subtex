@@ -18,7 +18,11 @@ export const auth = betterAuth({
   }),
   emailAndPassword: {
     enabled: true,
-    autoSignIn: true,
+    autoSignIn: false,
+  },
+  accountLinking: {
+    enabled: true,
+    trustedProviders: ["google"],
   },
   socialProviders: {
     google: {

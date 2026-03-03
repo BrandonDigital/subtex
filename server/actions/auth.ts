@@ -7,6 +7,7 @@ import {
   passwordResetTokens,
   emailVerificationCodes,
 } from "../schemas/users";
+import { companies } from "../schemas/companies";
 import { notificationPreferences } from "../schemas/notifications";
 import { eq, and, gt } from "drizzle-orm";
 import { z } from "zod";
@@ -19,12 +20,20 @@ import {
 } from "./email";
 import crypto from "crypto";
 
-const signUpSchema = z.object({
-  name: z.string().min(2, "Name must be at least 2 characters"),
-  email: z.string().email("Invalid email address"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
-  emailNotifications: z.boolean().optional().default(true),
-});
+const signUpSchema = z
+  .object({
+    name: z.string().min(2, "Name must be at least 2 characters"),
+    email: z.string().email("Invalid email address"),
+    password: z.string().min(8, "Password must be at least 8 characters"),
+    confirmPassword: z.string().min(1, "Please confirm your password"),
+    emailNotifications: z.boolean().optional().default(true),
+    companyName: z.string().max(255).optional(),
+    companyUrl: z.string().max(500).optional(),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
 
 const signInSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -67,7 +76,10 @@ export async function signUpAction(
       name: formData.get("name") as string,
       email: formData.get("email") as string,
       password: formData.get("password") as string,
+      confirmPassword: formData.get("confirmPassword") as string,
       emailNotifications: formData.get("emailNotifications") === "on",
+      companyName: (formData.get("companyName") as string) || undefined,
+      companyUrl: (formData.get("companyUrl") as string) || undefined,
     };
 
     const parsed = signUpSchema.safeParse(data);
@@ -129,6 +141,28 @@ export async function signUpAction(
       .update(users)
       .set({ emailVerified: false })
       .where(eq(users.id, newUser.id));
+
+    // Create company if provided during sign-up
+    if (parsed.data.companyName) {
+      const [newCompany] = await db
+        .insert(companies)
+        .values({
+          name: parsed.data.companyName,
+          url: parsed.data.companyUrl || null,
+          createdBy: newUser.id,
+        })
+        .returning();
+
+      if (newCompany) {
+        await db
+          .update(users)
+          .set({
+            companyId: newCompany.id,
+            company: parsed.data.companyName,
+          })
+          .where(eq(users.id, newUser.id));
+      }
+    }
 
     // Send verification code
     await sendVerificationCode(newUser.id, newUser.email);

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { siteConfig, seoContent, generateBreadcrumbSchema } from "@/lib/seo";
 
 export const metadata: Metadata = {
@@ -10,11 +11,12 @@ export const metadata: Metadata = {
   },
 };
 
-// JSON-LD Component
-function JsonLd({ data }: { data: object }) {
+function JsonLd({ id, data }: { id: string; data: object }) {
   return (
-    <script
+    <Script
+      id={id}
       type="application/ld+json"
+      strategy="afterInteractive"
       dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
     />
   );
@@ -28,11 +30,11 @@ export default function PrivacyPage() {
 
   return (
     <>
-      <JsonLd data={breadcrumbSchema} />
+      <JsonLd id="schema-privacy" data={breadcrumbSchema} />
 
       {/* Page Header */}
       <div className="bg-zinc-50 border-b">
-        <div className="container mx-auto px-4 py-16 sm:py-20">
+        <div className="w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20">
           <div className="max-w-3xl mx-auto text-center">
             <h1 className="text-4xl sm:text-5xl font-semibold text-zinc-900 mb-4 tracking-tight">
               Privacy Policy
@@ -47,7 +49,7 @@ export default function PrivacyPage() {
 
       {/* Content */}
       <div className="py-12 sm:py-16">
-        <div className="container mx-auto px-4">
+        <div className="w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-3xl mx-auto prose prose-zinc dark:prose-invert prose-lg">
             <h2>1. Information We Collect</h2>
             <p>We collect information you provide directly to us, including:</p>

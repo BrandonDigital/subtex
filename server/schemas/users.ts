@@ -10,6 +10,7 @@ import {
   primaryKey,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
+import { companies } from "./companies";
 
 export const userRoleEnum = pgEnum("user_role", ["user", "admin"]);
 
@@ -19,6 +20,9 @@ export const users = pgTable("users", {
   name: varchar("name", { length: 255 }),
   phone: varchar("phone", { length: 50 }),
   company: varchar("company", { length: 255 }),
+  companyId: uuid("company_id").references(() => companies.id, {
+    onDelete: "set null",
+  }),
   image: varchar("image", { length: 500 }),
   role: userRoleEnum("role").default("user").notNull(),
   emailVerified: boolean("email_verified").default(false).notNull(),
@@ -133,11 +137,24 @@ export const passkeys = pgTable("passkeys", {
 });
 
 // Relations
-export const usersRelations = relations(users, ({ many }) => ({
+export const usersRelations = relations(users, ({ one, many }) => ({
   accounts: many(accounts),
   sessions: many(sessions),
   addresses: many(addresses),
   passkeys: many(passkeys),
+  companyRelation: one(companies, {
+    fields: [users.companyId],
+    references: [companies.id],
+  }),
+}));
+
+export const companiesRelations = relations(companies, ({ one, many }) => ({
+  creator: one(users, {
+    fields: [companies.createdBy],
+    references: [users.id],
+    relationName: "companyCreator",
+  }),
+  members: many(users),
 }));
 
 export const accountsRelations = relations(accounts, ({ one }) => ({

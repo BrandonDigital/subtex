@@ -171,11 +171,14 @@ export function MoveDialog({
                             ? "opacity-50 cursor-not-allowed"
                             : "hover:bg-muted"
                         )}
+                        role="button"
+                        tabIndex={0}
                         onClick={() => {
                           if (!hasAssetInFolder) {
                             handleSelectFolder(folder.path);
                           }
                         }}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (!hasAssetInFolder) handleSelectFolder(folder.path); } }}
                       >
                         <button
                           className="p-0.5 hover:bg-muted-foreground/20 rounded"

@@ -3,11 +3,18 @@
 import { db } from "../db";
 import { auth } from "../auth";
 import { headers } from "next/headers";
-import { orders, refundRequests, orderStatusHistory } from "../schemas/orders";
+import {
+  orders,
+  orderItems,
+  refundRequests,
+  refundRequestItems,
+  orderStatusHistory,
+} from "../schemas/orders";
 import { users } from "../schemas/users";
-import { eq, and, desc } from "drizzle-orm";
+import { notifications, type NewNotification } from "../schemas/notifications";
+import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { stripe } from "@/lib/stripe";
+import { stripe } from "@/lib/server/stripe";
 import { sendEmail } from "./email";
 
 // ============ AUTH HELPERS ============
@@ -29,16 +36,53 @@ async function requireAdmin() {
   return user;
 }
 
+async function notifyAdmins({
+  title,
+  message,
+  link,
+}: {
+  title: string;
+  message: string;
+  link?: string;
+}) {
+  try {
+    const admins = await db.query.users.findMany({
+      where: eq(users.role, "admin"),
+      columns: { id: true },
+    });
+
+    if (admins.length === 0) return;
+
+    const notifs: NewNotification[] = admins.map((admin) => ({
+      userId: admin.id,
+      type: "order_update" as const,
+      title,
+      message,
+      link: link || null,
+      read: false,
+      emailSent: false,
+    }));
+
+    await db.insert(notifications).values(notifs);
+    revalidatePath("/dashboard");
+  } catch (err) {
+    console.error("Failed to notify admins:", err);
+  }
+}
+
 // ============ USER ACTIONS ============
 
 export async function requestRefund(
   orderId: string,
   reason: string,
-  requestedAmountInCents?: number
+  items: { orderItemId: string; quantity: number }[]
 ) {
   const user = await requireAuth();
 
-  // Get the order
+  if (!items || items.length === 0) {
+    return { success: false, error: "Please select at least one item to refund" };
+  }
+
   const order = await db.query.orders.findFirst({
     where: and(eq(orders.id, orderId), eq(orders.userId, user.id)),
     with: { items: true },
@@ -48,7 +92,6 @@ export async function requestRefund(
     return { success: false, error: "Order not found" };
   }
 
-  // Check if order is eligible for refund
   if (
     !["paid", "processing", "shipped", "delivered", "collected"].includes(
       order.status
@@ -57,7 +100,6 @@ export async function requestRefund(
     return { success: false, error: "This order is not eligible for a refund" };
   }
 
-  // Check if there's already a pending refund request
   const existingRequest = await db.query.refundRequests.findFirst({
     where: and(
       eq(refundRequests.orderId, orderId),
@@ -72,43 +114,83 @@ export async function requestRefund(
     };
   }
 
-  // Calculate max refundable amount
-  const maxRefundable = order.totalInCents - order.refundedAmountInCents;
-  const amountToRequest = requestedAmountInCents
-    ? Math.min(requestedAmountInCents, maxRefundable)
-    : maxRefundable;
+  // Validate each requested item and calculate total
+  const orderItemMap = new Map(order.items.map((i) => [i.id, i]));
+  let totalRequestedCents = 0;
+  const validatedItems: { orderItemId: string; quantity: number; amountInCents: number }[] = [];
 
-  if (amountToRequest <= 0) {
-    return {
-      success: false,
-      error: "This order has already been fully refunded",
-    };
+  for (const reqItem of items) {
+    const orderItem = orderItemMap.get(reqItem.orderItemId);
+    if (!orderItem) {
+      return { success: false, error: `Item not found in this order` };
+    }
+
+    const availableQty = orderItem.quantity - orderItem.refundedQuantity;
+    if (reqItem.quantity <= 0 || reqItem.quantity > availableQty) {
+      return {
+        success: false,
+        error: `Invalid quantity for "${orderItem.name}". Available: ${availableQty}`,
+      };
+    }
+
+    const itemAmount = reqItem.quantity * orderItem.unitPriceInCents;
+    totalRequestedCents += itemAmount;
+    validatedItems.push({
+      orderItemId: reqItem.orderItemId,
+      quantity: reqItem.quantity,
+      amountInCents: itemAmount,
+    });
   }
 
-  // Create refund request
+  if (totalRequestedCents <= 0) {
+    return { success: false, error: "Refund amount must be greater than zero" };
+  }
+
+  // Cap at remaining refundable order amount
+  const maxRefundable = order.totalInCents - order.refundedAmountInCents;
+  if (totalRequestedCents > maxRefundable) {
+    totalRequestedCents = maxRefundable;
+  }
+
   const [request] = await db
     .insert(refundRequests)
     .values({
       orderId,
       userId: user.id,
       reason,
-      requestedAmountInCents: amountToRequest,
+      requestedAmountInCents: totalRequestedCents,
       status: "pending",
     })
     .returning();
 
-  // Update order status
+  // Insert refund request items
+  await db.insert(refundRequestItems).values(
+    validatedItems.map((vi) => ({
+      refundRequestId: request.id,
+      orderItemId: vi.orderItemId,
+      quantity: vi.quantity,
+      amountInCents: vi.amountInCents,
+    }))
+  );
+
   await db
     .update(orders)
     .set({ status: "refund_requested", updatedAt: new Date() })
     .where(eq(orders.id, orderId));
 
-  // Add status history
   await db.insert(orderStatusHistory).values({
     orderId,
     status: "refund_requested",
-    note: `Refund requested: ${reason}`,
+    note: `Refund requested for ${validatedItems.length} item(s): ${reason}`,
     changedBy: user.id,
+  });
+
+  const customerName = (user as { name?: string | null }).name || user.email;
+  const amount = (totalRequestedCents / 100).toFixed(2);
+  await notifyAdmins({
+    title: "Refund Requested",
+    message: `${customerName} has requested a refund of $${amount} for ${validatedItems.length} item(s) on order #${order.orderNumber}. Reason: ${reason}`,
+    link: "/dashboard/orders",
   });
 
   revalidatePath("/orders");
@@ -131,6 +213,55 @@ export async function getUserRefundRequests() {
   return requests;
 }
 
+export async function cancelRefundRequest(requestId: string) {
+  const user = await requireAuth();
+
+  const request = await db.query.refundRequests.findFirst({
+    where: and(
+      eq(refundRequests.id, requestId),
+      eq(refundRequests.userId, user.id),
+      eq(refundRequests.status, "pending")
+    ),
+    with: { order: true },
+  });
+
+  if (!request) {
+    return { success: false, error: "Refund request not found or already processed" };
+  }
+
+  // Remove the refund request
+  await db.delete(refundRequests).where(eq(refundRequests.id, requestId));
+
+  // Restore order status
+  const order = request.order;
+  const previousStatus = order.paidAt ? "paid" : "pending";
+
+  await db
+    .update(orders)
+    .set({ status: previousStatus, updatedAt: new Date() })
+    .where(eq(orders.id, order.id));
+
+  await db.insert(orderStatusHistory).values({
+    orderId: order.id,
+    status: previousStatus,
+    note: "Refund request cancelled by customer",
+    changedBy: user.id,
+  });
+
+  // Notify admins
+  const customerName = (user as { name?: string | null }).name || user.email;
+  await notifyAdmins({
+    title: "Refund Cancelled",
+    message: `${customerName} has cancelled their refund request for order #${order.orderNumber}.`,
+    link: "/dashboard/orders",
+  });
+
+  revalidatePath("/orders");
+  revalidatePath("/dashboard/orders");
+
+  return { success: true };
+}
+
 // ============ ADMIN ACTIONS ============
 
 export async function getRefundRequests(
@@ -148,6 +279,11 @@ export async function getRefundRequests(
         },
       },
       user: true,
+      items: {
+        with: {
+          orderItem: true,
+        },
+      },
     },
     orderBy: [desc(refundRequests.createdAt)],
   });
@@ -162,12 +298,12 @@ export async function approveRefund(
 ) {
   const admin = await requireAdmin();
 
-  // Get the refund request with order details
   const request = await db.query.refundRequests.findFirst({
     where: eq(refundRequests.id, requestId),
     with: {
       order: true,
       user: true,
+      items: true,
     },
   });
 
@@ -194,7 +330,6 @@ export async function approveRefund(
     };
   }
 
-  // Process refund through Stripe
   if (!order.stripePaymentIntentId) {
     return { success: false, error: "No payment found for this order" };
   }
@@ -211,7 +346,6 @@ export async function approveRefund(
       },
     });
 
-    // Update refund request
     await db
       .update(refundRequests)
       .set({
@@ -224,7 +358,18 @@ export async function approveRefund(
       })
       .where(eq(refundRequests.id, requestId));
 
-    // Update order
+    // Increment refundedQuantity on each order item from this request
+    if (request.items && request.items.length > 0) {
+      for (const ri of request.items) {
+        await db
+          .update(orderItems)
+          .set({
+            refundedQuantity: sql`${orderItems.refundedQuantity} + ${ri.quantity}`,
+          })
+          .where(eq(orderItems.id, ri.orderItemId));
+      }
+    }
+
     const newRefundedAmount =
       order.refundedAmountInCents + approvedAmountInCents;
     const isFullRefund = newRefundedAmount >= order.totalInCents;
@@ -238,13 +383,12 @@ export async function approveRefund(
         status: isFullRefund
           ? "refunded"
           : order.status === "refund_requested"
-          ? "paid"
-          : order.status,
+            ? "paid"
+            : order.status,
         updatedAt: new Date(),
       })
       .where(eq(orders.id, order.id));
 
-    // Add status history
     await db.insert(orderStatusHistory).values({
       orderId: order.id,
       status: isFullRefund ? "refunded" : order.status,
@@ -254,7 +398,6 @@ export async function approveRefund(
       changedBy: admin.id,
     });
 
-    // Send email to customer
     const customerEmail = request.user?.email;
     if (customerEmail) {
       await sendRefundProcessedEmail(
@@ -395,7 +538,7 @@ async function sendRefundProcessedEmail(
               <hr style="border: none; border-top: 1px solid #e4e4e7; margin: 30px 0;">
               <p style="color: #a1a1aa; font-size: 14px; margin: 0;">
                 Subtex<br>
-                16 Brewer Rd, Canning Vale, Perth, WA, 6155
+                14B Brewer Rd, Canning Vale, Perth, WA, 6155
               </p>
             </div>
           </div>
@@ -445,7 +588,7 @@ async function sendRefundRejectedEmail(
               <hr style="border: none; border-top: 1px solid #e4e4e7; margin: 30px 0;">
               <p style="color: #a1a1aa; font-size: 14px; margin: 0;">
                 Subtex<br>
-                16 Brewer Rd, Canning Vale, Perth, WA, 6155
+                14B Brewer Rd, Canning Vale, Perth, WA, 6155
               </p>
             </div>
           </div>

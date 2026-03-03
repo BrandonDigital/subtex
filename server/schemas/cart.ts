@@ -20,6 +20,9 @@ export const cartItems = pgTable("cart_items", {
     .notNull()
     .references(() => products.id, { onDelete: "cascade" }),
 
+  // Unique client-side cart item identifier (for items with cutting specs)
+  cartItemId: varchar("cart_item_id", { length: 255 }),
+
   // Product snapshot at time of adding to cart
   partNumber: varchar("part_number", { length: 100 }),
   productName: varchar("product_name", { length: 255 }).notNull(),
@@ -36,6 +39,9 @@ export const cartItems = pgTable("cart_items", {
 
   // Bulk discounts stored as JSON
   bulkDiscounts: text("bulk_discounts"), // JSON array of { minQuantity, discountPercent }
+
+  // CNC Cutting specification stored as JSON
+  cuttingSpec: text("cutting_spec"), // JSON: { cutType, xCutMm, yCutMm }
 
   quantity: integer("quantity").notNull().default(1),
   createdAt: timestamp("created_at").defaultNow().notNull(),

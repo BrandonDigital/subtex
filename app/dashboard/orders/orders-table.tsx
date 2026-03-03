@@ -1,9 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { Search, Filter, Download, MoreHorizontal, Eye, RefreshCw, Ticket } from "lucide-react";
+import { Search, Filter, SquareArrowOutUpRight, Ticket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,21 +15,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
-import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { updateOrderStatus } from "@/server/actions/orders";
-import { toast } from "@/components/ui/toast";
 
 interface Order {
   id: string;
@@ -47,7 +36,6 @@ interface Order {
     name: string | null;
     email: string;
   } | null;
-  // Guest checkout fields
   guestName: string | null;
   guestEmail: string | null;
   guestPhone: string | null;
@@ -57,6 +45,7 @@ interface Order {
 
 interface OrdersTableProps {
   orders: Order[];
+  onViewOrder: (orderId: string) => void;
 }
 
 function formatPrice(priceInCents: number): string {
@@ -95,8 +84,7 @@ const deliveryLabels: Record<string, string> = {
   international: "International",
 };
 
-export function OrdersTable({ orders }: OrdersTableProps) {
-  const router = useRouter();
+export function OrdersTable({ orders, onViewOrder }: OrdersTableProps) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [deliveryFilter, setDeliveryFilter] = useState<string>("all");
@@ -116,16 +104,6 @@ export function OrdersTable({ orders }: OrdersTableProps) {
 
     return matchesSearch && matchesStatus && matchesDelivery;
   });
-
-  const handleStatusChange = async (orderId: string, newStatus: string) => {
-    try {
-      await updateOrderStatus(orderId, newStatus as any);
-      toast.success("Order status updated");
-      router.refresh();
-    } catch {
-      toast.error("Failed to update status");
-    }
-  };
 
   const totalItems = (items: { quantity: number }[]) => 
     items.reduce((sum, item) => sum + item.quantity, 0);
@@ -206,11 +184,12 @@ export function OrdersTable({ orders }: OrdersTableProps) {
               </TableHeader>
               <TableBody>
                 {filteredOrders.map((order) => {
-                  const hasPendingRefund = order.refundRequests.some(r => r.status === "pending");
-                  const isPartiallyRefunded = order.refundedAmountInCents > 0 && order.refundedAmountInCents < order.totalInCents;
-
                   return (
-                    <TableRow key={order.id}>
+                    <TableRow
+                      key={order.id}
+                      className="cursor-pointer"
+                      onClick={() => onViewOrder(order.id)}
+                    >
                       <TableCell>
                         <div>
                           <p className="font-medium">{order.orderNumber}</p>
@@ -218,16 +197,6 @@ export function OrdersTable({ orders }: OrdersTableProps) {
                             <Badge variant="outline" className="mt-1 text-xs gap-1">
                               <Ticket className="h-3 w-3" />
                               {order.discountCodeSnapshot}
-                            </Badge>
-                          )}
-                          {hasPendingRefund && (
-                            <Badge variant="destructive" className="mt-1 text-xs">
-                              Refund pending
-                            </Badge>
-                          )}
-                          {isPartiallyRefunded && (
-                            <Badge variant="secondary" className="mt-1 text-xs">
-                              Partial refund
                             </Badge>
                           )}
                         </div>
@@ -272,38 +241,13 @@ export function OrdersTable({ orders }: OrdersTableProps) {
                         {formatDate(order.createdAt)}
                       </TableCell>
                       <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem asChild>
-                              <Link href={`/dashboard/orders/${order.id}`}>
-                                <Eye className="h-4 w-4 mr-2" />
-                                View Details
-                              </Link>
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => handleStatusChange(order.id, "processing")}>
-                              <RefreshCw className="h-4 w-4 mr-2" />
-                              Mark Processing
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleStatusChange(order.id, "shipped")}>
-                              <RefreshCw className="h-4 w-4 mr-2" />
-                              Mark Shipped
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleStatusChange(order.id, "delivered")}>
-                              <RefreshCw className="h-4 w-4 mr-2" />
-                              Mark Delivered
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleStatusChange(order.id, "collected")}>
-                              <RefreshCw className="h-4 w-4 mr-2" />
-                              Mark Collected
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => onViewOrder(order.id)}
+                        >
+                          <SquareArrowOutUpRight className="h-4 w-4" />
+                        </Button>
                       </TableCell>
                     </TableRow>
                   );

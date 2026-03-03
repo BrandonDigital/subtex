@@ -1,6 +1,6 @@
 "use server";
 
-import { resend, FROM_EMAIL } from "@/lib/resend";
+import { resend, FROM_EMAIL } from "@/lib/server/resend";
 
 interface SendEmailOptions {
   to: string;
@@ -78,7 +78,7 @@ export async function sendWelcomeEmail(email: string, name: string) {
               <hr style="border: none; border-top: 1px solid #e4e4e7; margin: 30px 0;">
               <p style="color: #a1a1aa; font-size: 14px; margin: 0;">
                 Subtex<br>
-                16 Brewer Rd, Canning Vale, Perth, WA, 6155
+                14B Brewer Rd, Canning Vale, Perth, WA, 6155
               </p>
             </div>
           </div>
@@ -176,14 +176,14 @@ export async function sendOrderConfirmationEmail(
               <hr style="border: none; border-top: 1px solid #e4e4e7; margin: 30px 0;">
               <p style="color: #a1a1aa; font-size: 14px; margin: 0;">
                 Subtex<br>
-                16 Brewer Rd, Canning Vale, Perth, WA, 6155
+                14B Brewer Rd, Canning Vale, Perth, WA, 6155
               </p>
             </div>
           </div>
         </body>
       </html>
     `,
-    text: `Order Confirmed!\n\nHi ${name}, thank you for your order.\n\nOrder Number: ${orderNumber}\n\nItems:\n${itemsText}\n\nTotal (inc. GST): ${total}\n\nView your order: ${viewOrderUrl}\n\nSubtex\n16 Brewer Rd, Canning Vale, Perth, WA, 6155`,
+    text: `Order Confirmed!\n\nHi ${name}, thank you for your order.\n\nOrder Number: ${orderNumber}\n\nItems:\n${itemsText}\n\nTotal (inc. GST): ${total}\n\nView your order: ${viewOrderUrl}\n\nSubtex\n14B Brewer Rd, Canning Vale, Perth, WA, 6155`,
   });
 }
 
@@ -309,7 +309,7 @@ export async function sendVerificationCodeEmail(email: string, code: string) {
               <hr style="border: none; border-top: 1px solid #e4e4e7; margin: 30px 0;">
               <p style="color: #a1a1aa; font-size: 14px; margin: 0;">
                 Subtex<br>
-                16 Brewer Rd, Canning Vale, Perth, WA, 6155
+                14B Brewer Rd, Canning Vale, Perth, WA, 6155
               </p>
             </div>
           </div>
@@ -348,7 +348,7 @@ export async function sendSubscriptionConfirmationEmail(email: string) {
               <hr style="border: none; border-top: 1px solid #e4e4e7; margin: 30px 0;">
               <p style="color: #a1a1aa; font-size: 14px; margin: 0;">
                 Subtex<br>
-                16 Brewer Rd, Canning Vale, Perth, WA, 6155
+                14B Brewer Rd, Canning Vale, Perth, WA, 6155
               </p>
             </div>
           </div>
@@ -393,7 +393,7 @@ export async function sendLaunchNotificationEmail(email: string) {
               <hr style="border: none; border-top: 1px solid #e4e4e7; margin: 30px 0;">
               <p style="color: #a1a1aa; font-size: 14px; margin: 0;">
                 Subtex<br>
-                16 Brewer Rd, Canning Vale, Perth, WA, 6155
+                14B Brewer Rd, Canning Vale, Perth, WA, 6155
               </p>
               <p style="color: #a1a1aa; font-size: 12px; margin: 16px 0 0 0;">
                 You received this email because you signed up for launch notifications.
@@ -446,14 +446,14 @@ export async function sendGeneratedPasswordEmail(
               </p>
               <p style="color: #a1a1aa; font-size: 14px; margin: 16px 0 0 0;">
                 Subtex<br>
-                16 Brewer Rd, Canning Vale, Perth, WA, 6155
+                14B Brewer Rd, Canning Vale, Perth, WA, 6155
               </p>
             </div>
           </div>
         </body>
       </html>
     `,
-    text: `Hi ${name},\n\nA new password has been generated for your Subtex account.\n\nYour temporary password: ${password}\n\nFor security, we recommend changing this password after you sign in.\n\nSign in at: ${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3004"}/sign-in\n\nIf you didn't expect this email, please contact support immediately.\n\nSubtex\n16 Brewer Rd, Canning Vale, Perth, WA, 6155`,
+    text: `Hi ${name},\n\nA new password has been generated for your Subtex account.\n\nYour temporary password: ${password}\n\nFor security, we recommend changing this password after you sign in.\n\nSign in at: ${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3004"}/sign-in\n\nIf you didn't expect this email, please contact support immediately.\n\nSubtex\n14B Brewer Rd, Canning Vale, Perth, WA, 6155`,
   });
 }
 
@@ -488,7 +488,7 @@ export async function sendPasswordResetEmail(email: string, resetUrl: string) {
               <hr style="border: none; border-top: 1px solid #e4e4e7; margin: 30px 0;">
               <p style="color: #a1a1aa; font-size: 14px; margin: 0;">
                 Subtex<br>
-                16 Brewer Rd, Canning Vale, Perth, WA, 6155
+                14B Brewer Rd, Canning Vale, Perth, WA, 6155
               </p>
             </div>
           </div>
@@ -605,7 +605,7 @@ export async function sendContactFormConfirmation({
               <hr style="border: none; border-top: 1px solid #e4e4e7; margin: 30px 0;">
               <p style="color: #a1a1aa; font-size: 14px; margin: 0;">
                 Subtex<br>
-                16 Brewer Rd, Canning Vale, Perth, WA, 6155<br>
+                14B Brewer Rd, Canning Vale, Perth, WA, 6155<br>
                 <a href="mailto:sales@subtex.com.au" style="color: #52525b;">sales@subtex.com.au</a>
               </p>
             </div>
@@ -613,6 +613,6 @@ export async function sendContactFormConfirmation({
         </body>
       </html>
     `,
-    text: `Thanks for reaching out, ${name}!\n\nWe've received your message and will get back to you as soon as possible. Our team typically responds within 24 hours during business days.\n\nYour Message:\n${message}\n\nSubtex\n16 Brewer Rd, Canning Vale, Perth, WA, 6155\nsales@subtex.com.au`,
+    text: `Thanks for reaching out, ${name}!\n\nWe've received your message and will get back to you as soon as possible. Our team typically responds within 24 hours during business days.\n\nYour Message:\n${message}\n\nSubtex\n14B Brewer Rd, Canning Vale, Perth, WA, 6155\nsales@subtex.com.au`,
   });
 }

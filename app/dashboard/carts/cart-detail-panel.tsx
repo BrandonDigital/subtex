@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { X, Package, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -70,7 +71,10 @@ export function CartDetailPanel({
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-black/50 z-40"
+        role="button"
+        tabIndex={0}
         onClick={onClose}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClose(); } }}
       />
 
       {/* Panel */}
@@ -158,12 +162,14 @@ export function CartDetailPanel({
                       {index > 0 && <Separator className="my-4" />}
                       <div className="flex gap-4">
                         {/* Product Image */}
-                        <div className="w-16 h-16 bg-muted rounded-md flex items-center justify-center overflow-hidden shrink-0">
+                        <div className="relative w-16 h-16 bg-muted rounded-md flex items-center justify-center overflow-hidden shrink-0">
                           {item.imageUrl ? (
-                            <img
+                            <Image
                               src={item.imageUrl}
                               alt={item.productName}
-                              className="w-full h-full object-cover"
+                              width={64}
+                              height={64}
+                              className="object-cover"
                             />
                           ) : (
                             <Package className="h-6 w-6 text-muted-foreground" />

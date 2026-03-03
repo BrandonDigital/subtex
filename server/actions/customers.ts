@@ -5,7 +5,8 @@ import { auth } from "../auth";
 import { headers } from "next/headers";
 import { users } from "../schemas/users";
 import { orders } from "../schemas/orders";
-import { eq, sql, desc, and, gte, ne } from "drizzle-orm";
+import { eq, sql, desc, and, isNull, isNotNull } from "drizzle-orm";
+import { orderItems } from "../schemas/orders";
 
 // Auth helper
 async function requireAdmin() {
@@ -50,38 +51,37 @@ export async function getCustomersWithAnalytics(): Promise<
       createdAt: users.createdAt,
       orderCount: sql<number>`(
         SELECT COUNT(*)::int 
-        FROM ${orders} 
-        WHERE ${orders.userId} = ${users.id}
-        AND ${orders.status} NOT IN ('cancelled', 'refunded')
+        FROM "orders" 
+        WHERE "orders"."user_id" = "users"."id"
+        AND "orders"."status" NOT IN ('cancelled', 'refunded')
       )`.as("order_count"),
       totalSpent: sql<number>`COALESCE((
-        SELECT SUM(${orders.totalInCents})::int 
-        FROM ${orders} 
-        WHERE ${orders.userId} = ${users.id}
-        AND ${orders.status} NOT IN ('cancelled', 'refunded')
+        SELECT SUM("orders"."total_in_cents")::int 
+        FROM "orders" 
+        WHERE "orders"."user_id" = "users"."id"
+        AND "orders"."status" NOT IN ('cancelled', 'refunded')
       ), 0)`.as("total_spent"),
       firstOrderDate: sql<Date | null>`(
-        SELECT MIN(${orders.createdAt}) 
-        FROM ${orders} 
-        WHERE ${orders.userId} = ${users.id}
-        AND ${orders.status} NOT IN ('cancelled', 'refunded')
+        SELECT MIN("orders"."created_at") 
+        FROM "orders" 
+        WHERE "orders"."user_id" = "users"."id"
+        AND "orders"."status" NOT IN ('cancelled', 'refunded')
       )`.as("first_order_date"),
       lastOrderDate: sql<Date | null>`(
-        SELECT MAX(${orders.createdAt}) 
-        FROM ${orders} 
-        WHERE ${orders.userId} = ${users.id}
-        AND ${orders.status} NOT IN ('cancelled', 'refunded')
+        SELECT MAX("orders"."created_at") 
+        FROM "orders" 
+        WHERE "orders"."user_id" = "users"."id"
+        AND "orders"."status" NOT IN ('cancelled', 'refunded')
       )`.as("last_order_date"),
     })
     .from(users)
-    .where(eq(users.role, "user")) // Only get regular users, not admins
     .orderBy(
       desc(
         sql`(
         SELECT COUNT(*)::int 
-        FROM ${orders} 
-        WHERE ${orders.userId} = ${users.id}
-        AND ${orders.status} NOT IN ('cancelled', 'refunded')
+        FROM "orders" 
+        WHERE "orders"."user_id" = "users"."id"
+        AND "orders"."status" NOT IN ('cancelled', 'refunded')
       )`
       )
     );
@@ -115,11 +115,9 @@ export type CustomerStats = {
 export async function getCustomerStats(): Promise<CustomerStats> {
   await requireAdmin();
 
-  // Total users (excluding admins)
   const totalUsers = await db
     .select({ count: sql<number>`COUNT(*)::int` })
-    .from(users)
-    .where(eq(users.role, "user"));
+    .from(users);
 
   // Customers with at least one order
   const customersWithOrdersResult = await db.execute(sql`
@@ -245,6 +243,160 @@ export async function getCustomerOrderHistory(
       createdAt: customer.createdAt,
     },
     orders: customerOrders,
+    analytics: {
+      orderCount,
+      totalSpent,
+      averageOrderValue:
+        orderCount > 0 ? Math.round(totalSpent / orderCount) : 0,
+      firstOrderDate:
+        validOrders.length > 0
+          ? validOrders[validOrders.length - 1].createdAt
+          : null,
+      lastOrderDate: validOrders.length > 0 ? validOrders[0].createdAt : null,
+    },
+  };
+}
+
+// ============ GUEST CUSTOMERS ============
+
+export type GuestCustomer = {
+  email: string;
+  name: string | null;
+  phone: string | null;
+  orderCount: number;
+  totalSpent: number;
+  averageOrderValue: number;
+  firstOrderDate: Date | null;
+  lastOrderDate: Date | null;
+};
+
+export async function getGuestCustomers(): Promise<GuestCustomer[]> {
+  await requireAdmin();
+
+  const rows = await db
+    .select({
+      email: orders.guestEmail,
+      orderCount: sql<number>`COUNT(*)::int`.as("order_count"),
+      totalSpent:
+        sql<number>`COALESCE(SUM(${orders.totalInCents}), 0)::int`.as(
+          "total_spent"
+        ),
+      firstOrderDate: sql<Date | null>`MIN(${orders.createdAt})`.as(
+        "first_order_date"
+      ),
+      lastOrderDate: sql<Date | null>`MAX(${orders.createdAt})`.as(
+        "last_order_date"
+      ),
+    })
+    .from(orders)
+    .where(
+      and(
+        isNull(orders.userId),
+        isNotNull(orders.guestEmail),
+        sql`${orders.status} NOT IN ('cancelled', 'refunded')`
+      )
+    )
+    .groupBy(orders.guestEmail)
+    .orderBy(desc(sql`COUNT(*)`));
+
+  // For each unique email, grab the most recent name/phone from their latest order
+  const guests: GuestCustomer[] = [];
+
+  for (const row of rows) {
+    const latestOrder = await db
+      .select({
+        guestName: orders.guestName,
+        guestPhone: orders.guestPhone,
+      })
+      .from(orders)
+      .where(
+        and(
+          isNull(orders.userId),
+          eq(orders.guestEmail, row.email!)
+        )
+      )
+      .orderBy(desc(orders.createdAt))
+      .limit(1);
+
+    guests.push({
+      email: row.email!,
+      name: latestOrder[0]?.guestName || null,
+      phone: latestOrder[0]?.guestPhone || null,
+      orderCount: row.orderCount,
+      totalSpent: row.totalSpent,
+      averageOrderValue:
+        row.orderCount > 0 ? Math.round(row.totalSpent / row.orderCount) : 0,
+      firstOrderDate: row.firstOrderDate,
+      lastOrderDate: row.lastOrderDate,
+    });
+  }
+
+  return guests;
+}
+
+export type GuestCustomerOrderHistory = {
+  guest: {
+    email: string;
+    name: string | null;
+    phone: string | null;
+  };
+  orders: {
+    id: string;
+    orderNumber: string;
+    status: string;
+    totalInCents: number;
+    itemCount: number;
+    createdAt: Date;
+  }[];
+  analytics: {
+    orderCount: number;
+    totalSpent: number;
+    averageOrderValue: number;
+    firstOrderDate: Date | null;
+    lastOrderDate: Date | null;
+  };
+};
+
+export async function getGuestCustomerOrderHistory(
+  email: string
+): Promise<GuestCustomerOrderHistory | null> {
+  await requireAdmin();
+
+  const guestOrders = await db
+    .select({
+      id: orders.id,
+      orderNumber: orders.orderNumber,
+      status: orders.status,
+      totalInCents: orders.totalInCents,
+      createdAt: orders.createdAt,
+      guestName: orders.guestName,
+      guestPhone: orders.guestPhone,
+      itemCount: sql<number>`(
+        SELECT COUNT(*)::int FROM order_items WHERE order_id = ${orders.id}
+      )`.as("item_count"),
+    })
+    .from(orders)
+    .where(
+      and(isNull(orders.userId), eq(orders.guestEmail, email))
+    )
+    .orderBy(desc(orders.createdAt));
+
+  if (guestOrders.length === 0) return null;
+
+  const latest = guestOrders[0];
+  const validOrders = guestOrders.filter(
+    (o) => o.status !== "cancelled" && o.status !== "refunded"
+  );
+  const totalSpent = validOrders.reduce((sum, o) => sum + o.totalInCents, 0);
+  const orderCount = validOrders.length;
+
+  return {
+    guest: {
+      email,
+      name: latest.guestName,
+      phone: latest.guestPhone,
+    },
+    orders: guestOrders,
     analytics: {
       orderCount,
       totalSpent,

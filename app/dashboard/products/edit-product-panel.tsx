@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { ArrowLeft, Loader2, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -100,7 +101,23 @@ export function EditProductPanel({
     field: keyof Omit<ProductFormData, "bulkDiscounts" | "id">,
     value: string | number | boolean,
   ) => {
-    setFormData((prev) => (prev ? { ...prev, [field]: value } : prev));
+    setFormData((prev) => {
+      if (!prev) return prev;
+      // Auto-capitalize part number
+      const processedValue =
+        field === "partNumber" && typeof value === "string"
+          ? value.toUpperCase()
+          : value;
+      const updated = { ...prev, [field]: processedValue };
+      // Auto-generate slug from part number if slug is empty
+      if (field === "partNumber" && typeof value === "string" && !prev.slug) {
+        updated.slug = value
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-|-$/g, "");
+      }
+      return updated;
+    });
   };
 
   const addDiscount = () => {
@@ -165,12 +182,12 @@ export function EditProductPanel({
     try {
       const productData = {
         status: formData.status,
-        partNumber: formData.partNumber || null,
-        slug: formData.slug || null,
-        name: formData.name,
-        description: formData.description || null,
+        partNumber: formData.partNumber.trim() || null,
+        slug: formData.slug.trim() || null,
+        name: formData.name.trim(),
+        description: formData.description.trim() || null,
         basePriceInCents: formData.basePriceInCents,
-        imageUrl: formData.imageUrl || null,
+        imageUrl: formData.imageUrl.trim() || null,
         isAcm: formData.isAcm,
         acmColor:
           formData.isAcm && formData.acmColor
@@ -178,18 +195,18 @@ export function EditProductPanel({
             : null,
         acmMaterial:
           formData.isAcm && formData.acmMaterial
-            ? (formData.acmMaterial as "gloss" | "matte")
+            ? (formData.acmMaterial as "gloss/matte" | "gloss/primer")
             : null,
         acmSize:
           formData.isAcm && formData.acmSize
             ? (formData.acmSize as "standard" | "xl")
             : null,
-        width: formData.width || null,
-        height: formData.height || null,
-        depth: formData.depth || null,
-        weight: formData.weight || null,
-        metaTitle: formData.metaTitle || null,
-        metaDescription: formData.metaDescription || null,
+        width: formData.width.trim() || null,
+        height: formData.height.trim() || null,
+        depth: formData.depth.trim() || null,
+        weight: formData.weight.trim() || null,
+        metaTitle: formData.metaTitle.trim() || null,
+        metaDescription: formData.metaDescription.trim() || null,
       };
 
       await updateProduct(formData.id, productData);
@@ -337,11 +354,12 @@ export function EditProductPanel({
                 {formData.imageUrl ? (
                   <div className='relative group'>
                     <div className='relative aspect-video rounded-lg overflow-hidden border bg-muted'>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
+                      <Image
                         src={formData.imageUrl}
                         alt='Product image'
-                        className='w-full h-full object-cover'
+                        fill
+                        className='object-cover'
+                        sizes='(max-width: 768px) 100vw, 50vw'
                       />
                       <div className='absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2'>
                         <Button
@@ -449,8 +467,8 @@ export function EditProductPanel({
                           <SelectValue placeholder='Select material' />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value='gloss'>Gloss</SelectItem>
-                          <SelectItem value='matte'>Matte</SelectItem>
+                          <SelectItem value='gloss/matte'>Gloss/Matte</SelectItem>
+                          <SelectItem value='gloss/primer'>Gloss/Primer</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
